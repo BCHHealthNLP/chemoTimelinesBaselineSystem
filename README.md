@@ -92,7 +92,7 @@ Finally, assuming everything compiled and your *input* folder is populated you c
 ```
 mybroker/bin/artemis run &
 ```
-Then, once the ActiveMQ server is finished starting:
+Then, once the ActiveMQ broker is finished starting:
 ```
 java -cp instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-dependencies.jar \
      org.apache.ctakes.core.pipeline.PiperFileRunner \
