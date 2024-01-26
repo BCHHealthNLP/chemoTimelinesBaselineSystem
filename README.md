@@ -1,6 +1,36 @@
 # ChemoTimelines Docker
 
-Dockerizable source code for the author system for the [Chemotherapy Treatment Timelines Extraction from the Clinical Narrative](https://sites.google.com/view/chemotimelines2024/task-descriptions) shared task.
+Dockerizable source code for the baseline system for the [Chemotherapy Treatment Timelines Extraction from the Clinical Narrative](https://sites.google.com/view/chemotimelines2024/task-descriptions) shared task.
+
+## Core dependencies
+
+There are three main separate software packages that this code uses:
+- [Apache cTAKES](https://github.com/apache/ctakes)
+- [CLU Lab Timenorm](https://github.com/clulab/timenorm)
+- [Huggingface Transformers](https://huggingface.co/docs/transformers/index)
+
+
+cTAKES contains several tools for text engineering and information extraction with a focus on clinical text, it is based on [Apache UIMA](https://uima.apache.org).
+Within cTAKES the main module which drives this code is the cTAKES [Python Bridge to Java](https://github.com/apache/ctakes/tree/main/ctakes-pbj).
+While cTAKES is written in Java, the Python Bridge to Java (*ctakes-pbj*) allows for use of python code to process text artifacts the same way one can do 
+with Java within cTAKES.  *ctakes-pbj* accomplishes this by passing text artifacts and their annotated information between the relevant Java and Python processes 
+using [DKPro cassis]( https://github.com/dkpro/dkpro-cassis) for serialization, [Apache ActiveMQ]( https://activemq.apache.org) for message brokering, and [stomp.py](https://github.com/jasonrbriggs/stomp.py) for Python-side receipt from and transmission to ActiveMQ.  
+
+Timenorm provides methods for identifying normalizing date and time expressions.  We use a customized version (included as a maven module) where we change a heuristic for approximate dates.
+
+We used Huggingface Transformers for training the TLINK model, and use their [Pipelines interface](https://huggingface.co/docs/transformers/main_classes/pipelines) for loading the model for inference.
+
+## High-level system description
+
+Each document is annotated with paragraphs, sentences, and tokens by cTAKES. 
+The cTAKES dictionary module searches over the tokens for spans which match 
+chemotherapy mentions in the annotated gold (in this regard we are using gold entities for chemos, although *not* for time expressions).
+Then a cTAKES SVM-based tagger finds token spans which correspond to temporal expressions, and we use Timenorm to normalize them 
+to ISO format.  Finally, we create instances of chemotherapy and temporal expression pairs, and pass them to a PubMedBert-based classifier 
+which identifies the temporal relationship between them as events.  
+Finally the code outputs a file with all the classified instances organized by patient and filename, 
+with unique identifiers for each chemotherapy mention and temporal expression.  
+
 
 ## Overview of Docker dependencies
 
@@ -35,6 +65,7 @@ You may need `sudo` here as well:
 docker compose up
 ```
 
+
 ## Input and output structure
 
 Given the structure of the summarized gold timelines and the shared task data, the Docker assumes that the input in the `input`
@@ -60,23 +91,6 @@ And each row corresponds to a TLINK classification instance from a given file.  
  - `note_name` holds the name of the corresponding file (technically redundant if your files correspond to specification)
  - `tlink_inst` holds the full chemotherapy timex pairing instance that was fed to the classifier (mostly for debugging purposes)
 
-## Core dependencies
-
-There are three main separate software packages that this code uses:
-- [Apache cTAKES](https://github.com/apache/ctakes)
-- [CLU Lab Timenorm](https://github.com/clulab/timenorm)
-- [Huggingface Transformers](https://huggingface.co/docs/transformers/index)
-
-
-cTAKES contains several tools for text engineering and information extraction with a focus on clinical text, it is based on [Apache UIMA](https://uima.apache.org).
-Within cTAKES the main module which drives this code is the cTAKES [Python Bridge to Java](https://github.com/apache/ctakes/tree/main/ctakes-pbj).
-While cTAKES is written in Java, the Python Bridge to Java (*ctakes-pbj*) allows for use of python code to process text artifacts the same way one can do 
-with Java within cTAKES.  *ctakes-pbj* accomplishes this by passing text artifacts and their annotated information between the relevant Java and Python processes 
-using [DKPro cassis]( https://github.com/dkpro/dkpro-cassis) for serialization, [Apache ActiveMQ]( https://activemq.apache.org) for message brokering, and [stomp.py](https://github.com/jasonrbriggs/stomp.py) for Python-side receipt from and transmission to ActiveMQ.  
-
-Timenorm provides methods for identifying normalizing date and time expressions.  We use a customized version (included as a maven module) where we change a heuristic for approximate dates.
-
-We used Huggingface Transformers for training the TLINK model, and use their [Pipelines interface](https://huggingface.co/docs/transformers/main_classes/pipelines) for loading the model for inference.
 
 
 ## Architecture
