@@ -86,6 +86,22 @@ pip install stomp.py dkpro-cassis transformers[torch] pandas tomli setuptools
 ```
 mvn -U clean package
 ```
+If you run into issues with Torch, you might want to look into finding the Torch setup most appropriate for your 
+configuration and install it via `conda`.
+
+Finally, assuming everything compiled and your *input* folder is populated you can run the system via:
+```
+java -cp instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     org.apache.ctakes.core.pipeline.PiperFileRunner \
+     -p org/apache/ctakes/timelines/pipeline/Timelines \
+     -a  mybroker \
+     -v <path to your conda env, on my machine it's in /usr/local/miniconda3/envs> \
+     -i ../input/ \
+     -o ../output \
+     -l org/apache/ctakes/dictionary/lookup/fast/bsv/Unified_Gold_Dev.xml \
+     --pipPbj yes \
+```
+And assuming successful processing your `tsv` file should be in the *output* folder of the project root directory.
 ## Input and output structure
 
 Given the structure of the summarized gold timelines and the shared task data, the Docker assumes that the input in the `input`
