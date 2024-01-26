@@ -44,10 +44,9 @@ The image (by default) requires three folders for the TLINK, DTR, and contexual 
 
 There are three mounted directories:
 
-- *Input*: Each subfolder should be a patient identifier, the contents of the subfolder should be the patient's notes
+- *Input*: The collection of notes in a shared task cancer type cohort 
 - *Processing*: Timeline information extraction over each note within cTAKES, aggregation of results by patient identifier
-- *Output*: Aggregated timelines information, one `tsv` file per patient identifier 
-
+- *Output*: Aggregated unsummarized timelines information in a `tsv` file 
 ## Build docker image
 
 Under the project root directory ( you may need to use `sudo` ):
@@ -90,6 +89,10 @@ If you run into issues with Torch, you might want to look into finding the Torch
 configuration and install it via `conda`.
 
 Finally, assuming everything compiled and your *input* folder is populated you can run the system via:
+```
+mybroker/bin/artemis run &
+```
+Then, once the ActiveMQ server is finished starting:
 ```
 java -cp instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-dependencies.jar \
      org.apache.ctakes.core.pipeline.PiperFileRunner \
