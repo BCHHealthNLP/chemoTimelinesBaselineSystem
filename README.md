@@ -64,8 +64,28 @@ You may need `sudo` here as well:
 ```
 docker compose up
 ```
+## Running the system outside of a Docker image
 
-
+This is for the most part actually how we have ran the system during development, 
+and can be resorted to in the event of issues with creating or running a Docker image. 
+Use the following steps for setup:
+- Make sure you have Java JDK 8 and the latest version of maven installed (we use OpenJDK) and is set as your default Java
+- Create a conda 3.9 environment with `conda create -n timelines python=3.9`
+- Change directory into `timelines` under the project root
+- Create an ActiveMQ broker named `mybroker` in your current directory via:
+```
+curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.19.1/apache-artemis-2.19.1-bin.zip && \
+unzip apache-artemis-2.19.1-bin.zip && \
+apache-artemis-2.19.1/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous && \
+```
+- (temporary fix until we fix the PBJ and timelines dependencies issue) Install the Python dependencies via 
+```
+pip install stomp.py dkpro-cassis transformers[torch] pandas tomli setuptools
+```
+- Finally create the Java executable Jars with maven:
+```
+mvn -U clean package
+```
 ## Input and output structure
 
 Given the structure of the summarized gold timelines and the shared task data, the Docker assumes that the input in the `input`
