@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <groupId>org.healthnlp</groupId>
+  <version>5.0.0-SNAPSHOT</version>
+  <modelVersion>4.0.0</modelVersion>
+
+  <artifactId>txtimelines-lookup</artifactId>
+  <packaging>pom</packaging>
+  <properties>
+    <!--The Scala version is not the latest on purpose I'm afraid-->
+    <scala.version>2.12.8</scala.version>
+    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.target>8</maven.compiler.target>
+    <ctakes.version>5.0.0-SNAPSHOT</ctakes.version>
+    <skip.assembly>true</skip.assembly>
+  </properties>
+  <modules>
+    <module>tweaked-timenorm</module>
+    <module>instance-generator</module>
+  </modules>
+  <dependencies>
+    <dependency>
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>${scala.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.ctakes</groupId>
+      <artifactId>ctakes-core</artifactId>
+      <version>${ctakes.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-collections4</artifactId>
+      <version>4.4</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.ctakes</groupId>
+      <artifactId>ctakes-user-resources</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+      <version>${ctakes.version}</version>
+    </dependency>
+  </dependencies>
+  <repositories>
+    <repository>
+      <id>apache.snapshots</id>
+      <name>Apache Development Snapshot Repository</name>
+      <url>https://repository.apache.org/content/groups/snapshots/</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+  <build>
+    <plugins>
+      <!-- <plugin> -->
+      <!--   <groupId>org.apache.maven.plugins</groupId> -->
+      <!--   <artifactId>maven-assembly-plugin</artifactId> -->
+      <!--   <configuration> -->
+      <!--     <descriptorRefs> -->
+      <!--       <descriptorRef>jar-with-dependencies</descriptorRef> -->
+      <!--     </descriptorRefs> -->
+      <!--     <skipAssembly>${skip.assembly}</skipAssembly> -->
+      <!--     <archive> -->
+      <!--       <manifest> -->
+      <!--         <mainClass>org.apache.ctakes.core.pipeline.PiperFileRunner</mainClass> -->
+      <!--       </manifest> -->
+      <!--     </archive> -->
+      <!--   </configuration> -->
+      <!--   <executions> -->
+      <!--     <execution> -->
+      <!--       <id>make-assembly</id> -->
+      <!--       <phase>package</phase> -->
+      <!--       <goals> -->
+      <!--         <goal>single</goal> -->
+      <!--       </goals> -->
+      <!--     </execution> -->
+      <!--   </executions> -->
+      <!-- </plugin> -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <!--	Copy resources that should be user-editable for testing without requiring recompiling.  -->
+            <!--	This makes it much easier for developers to find resources. -->
+            <!--	Permanent edits must still be made in src/main/resources -->
+            <id>copy-user-resources</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/instance-generator/src/user/resources</directory>
+                </resource>
+              </resources>
+              <outputDirectory>${project.basedir}/resources</outputDirectory>
+            </configuration>
+	        </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>unpack-ctakes-resources</id>
+            <!-- Default phase is process-sources -->
+            <goals>
+              <goal>unpack-dependencies</goal>
+            </goals>
+            <configuration>
+              <includeGroupIds>org.apache.ctakes</includeGroupIds>
+              <includeArtifactIds>ctakes-user-resources</includeArtifactIds>
+              <outputDirectory>${project.basedir}/resources</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

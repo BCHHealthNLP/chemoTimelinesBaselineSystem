@@ -1,0 +1,13 @@
+Metadata-Version: 2.1
+Name: timelines
+Version: 5.0.0
+Summary: Harness for the Timelines annotators which rely on PBJ
+Author: BCH Health NLP Lab
+Author-email: BCH Health NLP Lab <eli.goldner@childrens.harvard.edu>
+Project-URL: Homepage, https://www.w3.org/Provider/Style/dummy.html
+Project-URL: Bug Tracker, https://www.w3.org/Provider/Style/dummy.html
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown

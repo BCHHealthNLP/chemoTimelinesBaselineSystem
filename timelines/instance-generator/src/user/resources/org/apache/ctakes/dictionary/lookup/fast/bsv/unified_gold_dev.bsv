@@ -1,0 +1,101 @@
+000|T061|alpha-2b interferon
+000|T061|chemotherapies
+000|T061|alibercept
+000|T061|aflibercept
+000|T061|afiblercept
+000|T061|ipilimumab
+000|T061|alflibercept
+000|T061|interferon
+000|T061|aflibercept
+000|T061|interleukin
+000|T061|alpha interferon
+000|T061|interferon, alpha 2b
+000|T061|interleukin-2
+000|T061|interleukin 2
+000|T061|alpha 2b interferon
+000|T061|adrucil
+000|T061|xelox
+000|T061|panitumumab
+000|T061|cpt-11
+000|T061|chemort
+000|T061|radiochemotherapy
+000|T061|taxane
+000|T061|eloxatin
+000|T061|5fu
+000|T061|5-fu
+000|T061|chemotherapeutic
+000|T061|folfox
+000|T061|cytotaxin
+000|T061|exemestane
+000|T061|5-fluorouracil
+000|T061|methotrexate
+000|T061|fluorouracil
+000|T061|folfox6
+000|T061|arimidex
+000|T061|folfiri
+000|T061|fluorouracil
+000|T061|regorafenib
+000|T061|bev
+000|T061|ac
+000|T061|cetuximab
+000|T061|4fu
+000|T061|capecitabine
+000|T061|mitomycin-c
+000|T061|folfox-6
+000|T061|fluoropyrimidine
+000|T061|anthracycline
+000|T061|aromasin
+000|T061|vectibix
+000|T061|5f-u
+000|T061|bevacizumab
+000|T061|tc
+000|T061|folfox therapy
+000|T061|avastin
+000|T061|erbitux
+000|T061|oxaliplatin
+000|T061|chemo-radiation
+000|T061|capeox
+000|T061|chemoirradiation
+000|T061|anastrazole
+000|T061|mitomycin
+000|T061|folfox7
+000|T061|xeloda
+000|T061|leucovorin
+000|T061|mitomycin c
+000|T061|irinotecan
+000|T061|chemoradiotherapy
+000|T061|oxalplatin
+000|T061|femara
+000|T061|chemoradiation
+000|T061|folfox 6
+000|T061|caboplatin
+000|T061|doxil
+000|T061|carbo
+000|T061|gemzar
+000|T061|chmeo
+000|T061|paclitaxel
+000|T061|chemotherapy
+000|T061|taxol
+000|T061|liposomal doxorubicin
+000|T061|carboplatin
+000|T061|gemcitabine
+000|T061|cisplatin
+000|T061|etoposide
+000|T061|t/c
+000|T061|topotecan
+000|T061|avastin
+000|T061|platinum
+000|T061|paraplatin
+000|T061|chemotherapy's
+000|T061|taxo
+000|T061|tamoxifen
+000|T061|anastrozole
+000|T061|chemotherapy
+000|T061|taxol
+000|T061|arimidex
+000|T061|carboplatin
+000|T061|cytoxan
+000|T061|adriamycin
+000|T061|abraxane
+000|T061|herceptin
+000|T061|taxotere

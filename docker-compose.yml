@@ -1,0 +1,20 @@
+version: "3.7"
+services:
+
+  dphe-timelines:
+    build:
+      context: .
+    image: dphe-timelines:0.1.0
+    container_name: dphe-timelines
+    volumes:
+      - "./input:/usr/src/app/input"
+      - "./processing:/usr/src/app/processing"
+      - "./output:/usr/src/app/output"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

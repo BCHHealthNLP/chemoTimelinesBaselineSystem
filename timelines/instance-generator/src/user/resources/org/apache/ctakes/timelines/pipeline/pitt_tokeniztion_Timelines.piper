@@ -1,0 +1,56 @@
+package org.apache.ctakes.timelines
+
+set SetJavaHome=no
+set ForceExit=no
+cli DTRModelPath=d
+cli ModalityModelPath=m
+cli TlinkModelPath=t
+// cli ReceivePort=r
+// cli SendPort=s
+// cli BrokerUser=u
+// cli BrokerPwd=w
+
+load PbjStarter
+
+add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/timelines_py" Wait=yes
+
+set TimelinesSecondStep=timelines.timelines_pipeline
+
+add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory --dtr_path $DTRModelPath --conmod_path $ModalityModelPath --tlink_path $TlinkModelPath"
+
+set minimumSpan=2
+set exclusionTags=“”
+
+// Full Pitt/DeepPhe sentencing and tokenization
+add SegmentsFromBracketedSectionTagsAnnotator
+add ParagraphAnnotator
+add SentenceDetectorAnnotatorBIO classifierJarPath=/org/apache/ctakes/core/models/sentdetect/model.jar
+add ListAnnotator
+add MrsDrSentenceJoiner
+add ParagraphSentenceFixer
+add ListParagraphFixer
+add ListSentenceFixer
+add EolSentenceFixer
+add TokenizerAnnotatorPTB
+
+// since the time annotation is (was?) out of wack
+add ContextDependentTokenizerAnnotator
+
+// Dictionary module requires tokens so needs to be loaded after the tokenization stack
+load DictionarySubPipe
+
+add EventFilter filterList=/org/apache/ctakes/dictionary/lookup/fast/blacklists/filterlist.txt
+
+add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
+add DCTAnnotator
+// loading this after the dictionaries so
+// we no longer waste time normalizing timexes
+// for files with no chemos
+add TimeMentionNormalizer
+
+// add PbjJmsSender SendQueue=JavaToPy SendStop=no
+add PbjJmsSender SendQueue=JavaToPy SendStop=yes
+
+// add PbjReceiverAE ReceiveQueue=PyToJava
+
+// add ArtemisStopper
