@@ -186,16 +186,6 @@ java -cp instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-de
 ```
 The `org.apache.ctakes.core.pipeline.PiperFileRunner` class is the entry point. `-a mybroker` points to the ActiveMQ broker for the process (you can see how to set one up in the Dockerfile). 
 
-### (Optional) running the core command outside of the Docker
-
-Add to the core command `-v <path to conda environment>** to run with a specified conda environment.  Ideally, cTAKES should start the ActiveMQ broker by itself when you run the command.  However we have had to start the broker ourselves before running the command via 
-```
-mybroker/bin/artemis run &
-```
-And stopping it after the run with:
-```
-mybroker/bin/artemis stop
-```
 ## The piper file
 
 The piper file at `org/apache/ctakes/timelines/pipeline/Timelines` describes the flow logic of the information extraction, e.g. the annotators involved, the order in which they are run, as well as their configuration parameters.
@@ -287,6 +277,8 @@ The core Python logic is in the file
 ```
 timelines/instance-generator/src/user/resources/org/apache/ctakes/timelines/timelines_py/src/timelines/timelines_delegator.py
 ```
+Like the Java annotators the Python annotator implements a `process` method which is the core driver of the annotator for processing each note's contents.  
+The raw output for the whole cancer type cohort is collected and written to TSV on disk in the `collection_process_complete` method. 
 
 ## Questions and technical issues
 
