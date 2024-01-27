@@ -2,6 +2,12 @@
 
 Dockerizable source code for the baseline system for the [Chemotherapy Treatment Timelines Extraction from the Clinical Narrative](https://sites.google.com/view/chemotimelines2024/task-descriptions) shared task.
 
+## Warning
+
+This is research code which depends on other research code.  None of which is shrink wrapped.  Run at your own risk and do not use in any kind of clinical decision making context.
+
+While operational there are known bugs in the code's dependencies which are still being resolved.
+
 ## Core dependencies
 
 There are three main separate software packages that this code uses:
@@ -19,6 +25,26 @@ using [DKPro cassis]( https://github.com/dkpro/dkpro-cassis) for serialization, 
 Timenorm provides methods for identifying normalizing date and time expressions.  We use a customized version (included as a maven module) where we change a heuristic for approximate dates.
 
 We used Huggingface Transformers for training the TLINK model, and use their [Pipelines interface](https://huggingface.co/docs/transformers/main_classes/pipelines) for loading the model for inference.
+
+## Recommended Hardware
+
+A CUDA capable GPU is preferable for running the TLINK classifier, but with sufficient memory the model can be run on CPU.  
+Outside of the Docker nothing needs to be done to effect this change, if however you want to run the Docker on a machine with no GPU 
+( or to disable GPU use ) then comment out the following lines in `docker-compose.yml`:
+```
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+```
+
+## Classifiers
+
+Our classifiers (currently only using TLINK) are accessible at  
+https://huggingface.co/HealthNLP.  By default the code downloads and loads the TLINK classifier from the Huggingface page.  
 
 ## High-level system description
 
@@ -55,7 +81,6 @@ Under the project root directory ( you may need to use `sudo` ):
 docker compose build --no-cache
 ```
 
-
 ## Start a container
 
 You may need `sudo` here as well:
@@ -63,6 +88,10 @@ You may need `sudo` here as well:
 ```
 docker compose up
 ```
+## Critical operation instruction
+
+Due to a current bug in the inter process communication, the process will finish writing but not close itself.  
+So when you see `Writing results for ...` followed by `Finished writing...` close the process via `Ctrl+c`
 ## Running the system outside of a Docker image
 
 This is for the most part actually how we have ran the system during development, 
@@ -104,7 +133,11 @@ java -cp instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-de
      -l org/apache/ctakes/dictionary/lookup/fast/bsv/Unified_Gold_Dev.xml \
      --pipPbj yes \
 ```
-And assuming successful processing your `tsv` file should be in the *output* folder of the project root directory.
+And assuming successful processing your `tsv` file should be in the *output* folder of the project root directory.  
+Finally, stop the ActiveMQ via:
+```
+mybroker/bin/artemis stop
+```
 ## Input and output structure
 
 Given the structure of the summarized gold timelines and the shared task data, the Docker assumes that the input in the `input`
@@ -134,7 +167,9 @@ And each row corresponds to a TLINK classification instance from a given file.  
 
 ## Architecture
 
-We use two maven modules, one for the Java and Python annotators relevant to processing the clinical notes, and the other which has the customized version of Timenorm.
+We use two maven modules, one for the Java and Python annotators relevant to processing the clinical notes, and the other which has the customized version of Timenorm.  There are not many files and their classpaths are not especially important for understanding, but more so for customization.
+
+For further documentation, please see the [cTAKES wiki](https://github.com/apache/ctakes/wiki), in particular for [cTAKES PBJ](https://github.com/apache/ctakes/wiki/pbj_intro).  If you run into issues in your attempts to customize the code, please use the contact information at the bottom of the README, or if appropriate, submit an issue.
 
 ### Core command
 
@@ -245,6 +280,13 @@ And finally:
 add PbjJmsSender SendQueue=JavaToPy SendStop=yes
 ```
 Sends the CASes which have been processed by the Java annotators to the Python annotator via the ActiveMQ send queue.
+
+## Core Python processing annotator
+
+The core Python logic is in the file 
+```
+timelines/instance-generator/src/user/resources/org/apache/ctakes/timelines/timelines_py/src/timelines/timelines_delegator.py
+```
 
 ## Questions and technical issues
 
