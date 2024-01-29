@@ -5,7 +5,7 @@ from ctakes_pbj.component.pbj_receiver import start_receiver, PBJReceiver
 from ctakes_pbj.component.pbj_sender import PBJSender
 from ctakes_pbj.pipeline.pbj_pipeline import PBJPipeline
 
-from .timeline_delegator import TimelineDelegator
+from .timeline_annotator import TimelineAnnotator
 
 
 warnings.filterwarnings("ignore")
@@ -16,7 +16,7 @@ def main():
     # Create a new PBJ Pipeline, add a class that interacts with cNLPT to add Negation to Events.
     pipeline = PBJPipeline()
     receiver = PBJReceiver()
-    annotator = TimelineDelegator()
+    annotator = TimelineAnnotator()
     # sender = PBJSender()
     pipeline.reader(receiver)
     pipeline.add(annotator)
