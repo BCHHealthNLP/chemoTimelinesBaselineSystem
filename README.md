@@ -16,11 +16,9 @@ There are three main separate software packages that this code uses:
 - [Huggingface Transformers](https://huggingface.co/docs/transformers/index)
 
 
-cTAKES contains several tools for text engineering and information extraction with a focus on clinical text, it is based on [Apache UIMA](https://uima.apache.org).
+cTAKES contains several tools for text engineering and information extraction with a focus on clinical text, it makes heavy use of [Apache UIMA](https://uima.apache.org).
 Within cTAKES the main module which drives this code is the cTAKES [Python Bridge to Java](https://github.com/apache/ctakes/tree/main/ctakes-pbj).
-While cTAKES is written in Java, the Python Bridge to Java (*ctakes-pbj*) allows for use of python code to process text artifacts the same way one can do 
-with Java within cTAKES.  *ctakes-pbj* accomplishes this by passing text artifacts and their annotated information between the relevant Java and Python processes 
-using [DKPro cassis]( https://github.com/dkpro/dkpro-cassis) for serialization, [Apache ActiveMQ]( https://activemq.apache.org) for message brokering, and [stomp.py](https://github.com/jasonrbriggs/stomp.py) for Python-side receipt from and transmission to ActiveMQ.  
+While cTAKES is written in Java, the Python Bridge to Java (*ctakes-pbj*) allows for use of python code to process text artifacts the same way one can do with Java within cTAKES.  *ctakes-pbj* accomplishes this by passing text artifacts and their annotated information between the relevant Java and Python processes  using [DKPro cassis]( https://github.com/dkpro/dkpro-cassis) for serialization, [Apache ActiveMQ]( https://activemq.apache.org) for message brokering, and [stomp.py](https://github.com/jasonrbriggs/stomp.py) for Python-side receipt from and transmission to ActiveMQ.
 
 Timenorm provides methods for identifying normalizing date and time expressions.  We use a customized version (included as a maven module) where we change a heuristic for approximate dates.
 
@@ -28,9 +26,7 @@ We used Huggingface Transformers for training the TLINK model, and use their [Pi
 
 ## Recommended Hardware
 
-A CUDA capable GPU is preferable for running the TLINK classifier, but with sufficient memory the model can be run on CPU.  
-Outside of the Docker nothing needs to be done to effect this change, if however you want to run the Docker on a machine with no GPU 
-( or to disable GPU use ) then comment out the following lines in `docker-compose.yml`:
+A CUDA capable GPU is preferable for running the TLINK classifier, but with sufficient memory the model can be run on CPU.  Outside of the Docker nothing needs to be done to effect this change, if however you want to run the Docker on a machine with no GPU ( or to disable GPU use ) then comment out the following lines in `docker-compose.yml`:
 ```
     deploy:
       resources:
@@ -43,19 +39,11 @@ Outside of the Docker nothing needs to be done to effect this change, if however
 
 ## Classifiers
 
-Our classifiers (currently only using TLINK) are accessible at  
-https://huggingface.co/HealthNLP.  By default the code downloads and loads the TLINK classifier from the Huggingface page.  
+Our classifiers (currently only using TLINK) are accessible at https://huggingface.co/HealthNLP.  By default the code downloads and loads the TLINK classifier from the Huggingface page.  
 
 ## High-level system description
 
-Each document is annotated with paragraphs, sentences, and tokens by cTAKES. 
-The cTAKES dictionary module searches over the tokens for spans which match 
-chemotherapy mentions in the annotated gold (in this regard we are using gold entities for chemos, although *not* for time expressions).
-Then a cTAKES SVM-based tagger finds token spans which correspond to temporal expressions, and we use Timenorm to normalize them 
-to ISO format.  Finally, we create instances of chemotherapy and temporal expression pairs, and pass them to a PubMedBert-based classifier 
-which identifies the temporal relationship between them as events.  
-Finally the code outputs a file with all the classified instances organized by patient and filename, 
-with unique identifiers for each chemotherapy mention and temporal expression.  
+Each document is annotated with paragraphs, sentences, and tokens by cTAKES.  The cTAKES dictionary module searches over the tokens for spans which match chemotherapy mentions in the annotated gold (in this regard we are using gold entities for chemos, although *not* for time expressions).  Then a cTAKES SVM-based tagger finds token spans which correspond to temporal expressions, and we use Timenorm to normalize them to ISO format.  Finally, we create instances of chemotherapy and temporal expression pairs, and pass them to a PubMedBert-based classifier which identifies the temporal relationship between them as events.  Finally the code outputs a file with all the classified instances organized by patient and filename, with unique identifiers for each chemotherapy mention and temporal expression.  
 
 
 ## Overview of Docker dependencies
@@ -64,8 +52,6 @@ with unique identifiers for each chemotherapy mention and temporal expression.
 - [Docker Compose](https://docs.docker.com/compose/install/)
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
 
-The image (by default) requires three folders for the TLINK, DTR, and contexual modality Huggingface classifiers at the top of the repository with the respective names `tlink`, `dtr`, and `conmod`.
-
 ## Data directories
 
 There are three mounted directories:
@@ -73,7 +59,8 @@ There are three mounted directories:
 - *Input*: The collection of notes in a shared task cancer type cohort 
 - *Processing*: Timeline information extraction over each note within cTAKES, aggregation of results by patient identifier
 - *Output*: Aggregated unsummarized timelines information in a `tsv` file 
-## Build docker image
+
+## Build a Docker image
 
 Under the project root directory ( you may need to use `sudo` ):
 
@@ -90,13 +77,11 @@ docker compose up
 ```
 ## Critical operation instruction
 
-Due to a current bug in the inter process communication, the process will finish writing but not close itself.  
-So when you see `Writing results for ...` followed by `Finished writing...` close the process via `Ctrl+c`
+Due to a current bug in the inter process communication, the process will finish writing but not close itself.  So when you see `Writing results for ...` followed by `Finished writing...` close the process via `ctrl+c`
+
 ## Running the system outside of a Docker image
 
-This is for the most part actually how we have ran the system during development, 
-and can be resorted to in the event of issues with creating or running a Docker image. 
-Use the following steps for setup:
+This is for the most part actually how we have ran the system during development, and can be resorted to in the event of issues with creating or running a Docker image.  Use the following steps for setup:
 - Make sure you have Java JDK 8 and the latest version of maven installed (we use OpenJDK) and is set as your default Java
 - Create a conda 3.9 environment with `conda create -n timelines python=3.9`
 - Change directory into `timelines` under the project root
@@ -104,9 +89,9 @@ Use the following steps for setup:
 ```
 curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.19.1/apache-artemis-2.19.1-bin.zip && \
 unzip apache-artemis-2.19.1-bin.zip && \
-apache-artemis-2.19.1/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous && \
+apache-artemis-2.19.1/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous
 ```
-- (temporary fix until we fix the PBJ and timelines dependencies issue) Install the Python dependencies via 
+- (temporary fix until we fix the PBJ and timelines dependencies issue) Install the Python dependencies via:
 ```
 pip install stomp.py dkpro-cassis transformers[torch] pandas tomli setuptools
 ```
@@ -114,8 +99,7 @@ pip install stomp.py dkpro-cassis transformers[torch] pandas tomli setuptools
 ```
 mvn -U clean package
 ```
-If you run into issues with Torch, you might want to look into finding the Torch setup most appropriate for your 
-configuration and install it via `conda`.
+If you run into issues with Torch, you might want to look into finding the Torch setup most appropriate for your configuration and install it via `conda`.
 
 Finally, assuming everything compiled and your *input* folder is populated you can run the system via:
 ```
@@ -133,8 +117,7 @@ java -cp instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-de
      -l org/apache/ctakes/dictionary/lookup/fast/bsv/Unified_Gold_Dev.xml \
      --pipPbj yes \
 ```
-And assuming successful processing your `tsv` file should be in the *output* folder of the project root directory.  
-Finally, stop the ActiveMQ via:
+And assuming successful processing your `tsv` file should be in the *output* folder of the project root directory.  Finally, stop the ActiveMQ via:
 ```
 mybroker/bin/artemis stop
 ```
@@ -145,8 +128,7 @@ folder will take the form of a collection of notes comprising all the patients o
 ```
 <patient identifier>_<four digit year>_<two digit month>_<two digit date>
 ```
-Where the year month and date correspond to the creation time of the file.  
-All the files in the shared task dataset follow this schema so for our data there is nothing you need to do. 
+Where the year month and date correspond to the creation time of the file.  All the files in the shared task dataset follow this schema so for our data there is nothing you need to do.
 
 Assuming successful processing, the output file will be a tab separated value (`tsv`) file in the `output` folder.
 The file will have the columns:
@@ -162,7 +144,6 @@ And each row corresponds to a TLINK classification instance from a given file.  
  - `timex_annotation_id` assigns the time expression in the previous cell a unique identifier (at the token rather than the type level)
  - `note_name` holds the name of the corresponding file (technically redundant if your files correspond to specification)
  - `tlink_inst` holds the full chemotherapy timex pairing instance that was fed to the classifier (mostly for debugging purposes)
-
 
 
 ## Architecture
@@ -242,7 +223,7 @@ set TimelinesSecondStep=timelines.timelines_pipeline
 
 add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory"
 ```
-This starts the Python annotator and has it wait on the ArtemisMQ receive queue for incoming CASes.    
+This starts the Python annotator and has it wait on the ArtemisMQ receive queue for incoming CASes.
 ```
 set minimumSpan=2
 set exclusionTags=“”
@@ -257,7 +238,7 @@ load DefaultTokenizerPipeline
 add ContextDependentTokenizerAnnotator
 load DictionarySubPipe
 ```
-`minimumSpan` and `exclusionTags` are both configuration parameters for the dictionary lookup module, we don't exclude any parts of speech for lookup and want only to retrieve turns of at least two characters.  The `DefaultTokenizerPipeline` annotates each CAS for paragraphs, sentences, and tokens.  The `ContextDependentTokenizerAnnotator` depends on annotated base tokens and identifies basic numerical expressions for dates and times.  The `DictionarySubPipe` module loads the dictionary configuration XML provided with the `-l` tag in the execution of the main Jar file.          
+`minimumSpan` and `exclusionTags` are both configuration parameters for the dictionary lookup module, we don't exclude any parts of speech for lookup and want only to retrieve turns of at least two characters.  The `DefaultTokenizerPipeline` annotates each CAS for paragraphs, sentences, and tokens.  The `ContextDependentTokenizerAnnotator` depends on annotated base tokens and identifies basic numerical expressions for dates and times.  The `DictionarySubPipe` module loads the dictionary configuration XML provided with the `-l` tag in the execution of the main Jar file.
 ```
 add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
 add DCTAnnotator
@@ -273,12 +254,11 @@ Sends the CASes which have been processed by the Java annotators to the Python a
 
 ## Core Python processing annotator
 
-The core Python logic is in the file 
+The core Python logic is in the file:
 ```
 timelines/instance-generator/src/user/resources/org/apache/ctakes/timelines/timelines_py/src/timelines/timelines_delegator.py
 ```
-Like the Java annotators the Python annotator implements a `process` method which is the core driver of the annotator for processing each note's contents.  
-The raw output for the whole cancer type cohort is collected and written to TSV on disk in the `collection_process_complete` method. 
+Like the Java annotators the Python annotator implements a `process` method which is the core driver of the annotator for processing each note's contents.  The raw output for the whole cancer type cohort is collected and written to TSV on disk in the `collection_process_complete` method.
 
 ## Questions and technical issues
 
