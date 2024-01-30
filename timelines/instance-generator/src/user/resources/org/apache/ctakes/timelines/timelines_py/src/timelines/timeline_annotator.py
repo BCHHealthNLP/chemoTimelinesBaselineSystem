@@ -129,6 +129,8 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         if len(proc_mentions) > 0:
             self._write_raw_timelines(cas, proc_mentions)
         else:
+            # empty discovery writing logic so no patients are skipped for the eval script
+            self._add_empty_discovery(cas)
             patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
             print(
                 f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) found in patient {patient_id} note {note_name}  - skipping"
@@ -155,31 +157,33 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"Modality filtering turned off, proceeding for patient {patient_id} note {note_name}"
             )
             self._write_actual_proc_mentions(cas, proc_mentions)
-            return
-        conmod_instances = (
-            TimelineAnnotator._get_conmod_instance(chemo, cas)
-            for chemo in proc_mentions
-        )
-
-        conmod_classifications = (
-            result["label"]
-            for result in filter(None, self.conmod_classifier(conmod_instances))
-        )
-        actual_proc_mentions = [
-            chemo
-            for chemo, modality in zip(proc_mentions, conmod_classifications)
-            if modality == "ACTUAL"
-        ]
-
-        if len(actual_proc_mentions) > 0:
-            print(
-                f"Found concrete chemotherapy mentions in patient {patient_id} note {note_name} - proceeding"
-            )
-            self._write_actual_proc_mentions(cas, actual_proc_mentions)
         else:
-            print(
-                f"No concrete chemotherapy mentions found in patient {patient_id} note {note_name} - skipping"
+            conmod_instances = (
+                TimelineAnnotator._get_conmod_instance(chemo, cas)
+                for chemo in proc_mentions
             )
+
+            conmod_classifications = (
+                result["label"]
+                for result in filter(None, self.conmod_classifier(conmod_instances))
+            )
+            actual_proc_mentions = [
+                chemo
+                for chemo, modality in zip(proc_mentions, conmod_classifications)
+                if modality == "ACTUAL"
+            ]
+
+            if len(actual_proc_mentions) > 0:
+                print(
+                    f"Found concrete chemotherapy mentions in patient {patient_id} note {note_name} - proceeding"
+                )
+                self._write_actual_proc_mentions(cas, actual_proc_mentions)
+            else:
+                # empty discovery writing logic so no patients are skipped for the eval script
+                self._add_empty_discovery(cas)
+                print(
+                    f"No concrete chemotherapy mentions found in patient {patient_id} note {note_name} - skipping"
+                )
 
     def _write_actual_proc_mentions(
         self, cas: Cas, positive_chemo_mentions: List[FeatureStructure]
@@ -237,6 +241,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             print(
                 f"WARNING: No normalized timexes discovered in {patient_id} file {note_name}"
             )
+        # empty discovery writing logic so no patients are skipped for the eval script
+        if all(map(lambda value: len(value) == 0, tlink_result_dict.values())):
+            self._add_empty_discovery(cas)
         for chemo in positive_chemo_mentions:
             if self.use_dtr:
                 chemo_dtr, dtr_inst = dtr_result(chemo)
@@ -272,6 +279,38 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                         tlink_inst,
                     ]
                 self.raw_events.append(instance)
+
+    def _add_empty_discovery(self, cas: Cas):
+        cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
+        document_creation_time = cas_source_data.sourceOriginalDate
+        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
+        if self.use_dtr:
+            instance = [
+                document_creation_time,
+                patient_id,
+                "none",
+                "none",
+                "none",
+                "none",
+                "none",
+                "none",
+                note_name,
+                "none",
+                "none",
+            ]
+        else:
+            instance = [
+                document_creation_time,
+                patient_id,
+                "none",
+                "none",
+                "none",
+                "none",
+                "none",
+                note_name,
+                "none",
+            ]
+        self.raw_events.append(instance)
 
     @staticmethod
     def _normalize_mention(mention: Union[FeatureStructure, None]) -> str:
