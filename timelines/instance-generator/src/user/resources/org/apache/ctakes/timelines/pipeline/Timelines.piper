@@ -7,7 +7,7 @@ load PbjStarter
 
 add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/timelines_py" Wait=yes
 
-set TimelinesSecondStep=timelines.timelines_pipeline
+set TimelinesSecondStep=timelines.timelines_python_pipeline
 
 add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory"
 
