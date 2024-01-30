@@ -11,21 +11,15 @@ from .timeline_annotator import TimelineAnnotator
 warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
+
 def main():
-    print("In main of PBJ annotator driver")
-    # Create a new PBJ Pipeline, add a class that interacts with cNLPT to add Negation to Events.
     pipeline = PBJPipeline()
     receiver = PBJReceiver()
     annotator = TimelineAnnotator()
-    # sender = PBJSender()
     pipeline.reader(receiver)
     pipeline.add(annotator)
-    # Add a PBJ Sender to the end of the pipeline to send the processed cas back to cTAKES and initialize the pipeline.
-    # pipeline.add(sender)
     pipeline.initialize()
     pipeline.run()
-    # Start a PBJ receiver to accept cas objects from Artemis and process them in the pipeline.
-    # start_receiver(pipeline)
 
 
 main()
