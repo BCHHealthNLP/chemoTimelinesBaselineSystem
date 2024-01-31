@@ -198,6 +198,11 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         base_tokens, token_map = TimelineAnnotator._tokens_and_map(cas, mode="dtr")
         begin2token, end2token = TimelineAnnotator._invert_map(token_map)
 
+        def local_window_mentions(chemo):
+            return TimelineAnnotator._get_tlink_window_mentions(
+                chemo, relevant_timexes, begin2token, end2token, token_map
+            )
+
         def dtr_result(chemo):
             inst = TimelineAnnotator._get_dtr_instance(
                 chemo, base_tokens, begin2token, end2token
@@ -217,9 +222,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             return label, inst
 
         def tlink_result_dict(chemo):
-            window_mentions = TimelineAnnotator._get_tlink_window_mentions(
-                chemo, relevant_timexes, begin2token, end2token, token_map
-            )
+            window_mentions = local_window_mentions(chemo)
             return {
                 window_mention: tlink_result(chemo, window_mention)
                 for window_mention in window_mentions
@@ -237,15 +240,24 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 )
             )
         }
-        if len(relevant_timexes) == 0:
-            print(
-                f"WARNING: No normalized timexes discovered in {patient_id} file {note_name}"
+        if (
+            len(list(relevant_timexes)) == 0
+            or len(
+                list(
+                    chain.from_iterable(
+                        map(local_window_mentions, positive_chemo_mentions)
+                    )
+                )
             )
-        # empty discovery writing logic so no patients are skipped for the eval script
-        if not any(tlink_result_dict.values()):
+            == 0
+        ):
+            print(
+                f"WARNING: Timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
+            )
             self._add_empty_discovery(cas)
             return
         for chemo in positive_chemo_mentions:
+            chemo_dtr, dtr_inst = "", ""  # purely so pyright stops complaining
             if self.use_dtr:
                 chemo_dtr, dtr_inst = dtr_result(chemo)
             tlink_dict = tlink_result_dict(chemo)
@@ -285,9 +297,19 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
         document_creation_time = cas_source_data.sourceOriginalDate
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
-        if self.use_dtr:
-            instance = [
-                document_creation_time,
+        self.raw_events.append(
+            TimelineAnnotator._empty_discovery(
+                document_creation_time, patient_id, note_name, self.use_dtr
+            )
+        )
+
+    @staticmethod
+    def _empty_discovery(
+        DCT: str, patient_id: str, note_name: str, use_dtr: bool
+    ) -> List[str]:
+        if use_dtr:
+            return [
+                DCT,
                 patient_id,
                 "none",
                 "none",
@@ -299,19 +321,17 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 "none",
                 "none",
             ]
-        else:
-            instance = [
-                document_creation_time,
-                patient_id,
-                "none",
-                "none",
-                "none",
-                "none",
-                "none",
-                note_name,
-                "none",
-            ]
-        self.raw_events.append(instance)
+        return [
+            DCT,
+            patient_id,
+            "none",
+            "none",
+            "none",
+            "none",
+            "none",
+            note_name,
+            "none",
+        ]
 
     @staticmethod
     def _normalize_mention(mention: Union[FeatureStructure, None]) -> str:
