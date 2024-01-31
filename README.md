@@ -125,13 +125,7 @@ mybroker/bin/artemis stop
 ## Input and output structure
 
 Given the structure of the summarized gold timelines and the shared task data, the Docker assumes that the input in the `input`
-folder will take the form of a collection of notes comprising all the patients of a given cancer type cohort (for the shared task one of melanoma or ovarian or breast cancers), the base filenames of which will correspond to the scheme:
-```
-<patient identifier>_<four digit year>_<two digit month>_<two digit date>
-```
-Where the year month and date correspond to the creation time of the file.  All the files in the shared task dataset follow this schema so for our data there is nothing you need to do.
-
-Assuming successful processing, the output file will be a tab separated value (`tsv`) file in the `output` folder.
+folder will take the form of a collection of notes comprising all the patients of a given cancer type cohort.  Assuming successful processing, the output file will be a tab separated value (`tsv`) file in the `output` folder.
 The file will have the columns:
 ```
 DCT	patient_id	chemo_text	chemo_annotation_id	normed_timex	timex_annotation_id	tlink	note_name	tlink_inst
