@@ -377,6 +377,7 @@ class TimelineDelegator(cas_annotator.CasAnnotator):
         if len(proc_mentions) > 0:
             self._write_raw_timelines(cas, proc_mentions)
         else:
+            self._add_empty_discovery(cas)
             patient_id, note_name = pt_and_note(cas)
             print(
                 f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) found in patient {patient_id} note {note_name}  - skipping"
@@ -424,6 +425,7 @@ class TimelineDelegator(cas_annotator.CasAnnotator):
             )
             self._write_actual_proc_mentions(cas, actual_proc_mentions)
         else:
+            self._add_empty_discovery(cas)
             print(
                 f"No concrete chemotherapy mentions found in patient {patient_id} note {note_name} - skipping"
             )
@@ -432,13 +434,17 @@ class TimelineDelegator(cas_annotator.CasAnnotator):
         self, cas: Cas, positive_chemo_mentions: List[FeatureStructure]
     ):
         timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
-        event_type = cas.typesystem.get_type(ctakes_types.EventMention)
         cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
         document_creation_time = cas_source_data.sourceOriginalDate
         relevant_timexes = timexes_with_normalization(cas.select(timex_type))
 
         base_tokens, token_map = tokens_and_map(cas, mode="dtr")
         begin2token, end2token = invert_map(token_map)
+
+        def local_window_mentions(chemo):
+            return get_tlink_window_mentions(
+                chemo, relevant_timexes, begin2token, end2token, token_map
+            )
 
         def dtr_result(chemo):
             inst = get_dtr_instance(chemo, base_tokens, begin2token, end2token)
@@ -455,9 +461,7 @@ class TimelineDelegator(cas_annotator.CasAnnotator):
             return label, inst
 
         def tlink_result_dict(chemo):
-            window_mentions = get_tlink_window_mentions(
-                chemo, relevant_timexes, begin2token, end2token, token_map
-            )
+            window_mentions = local_window_mentions(chemo)
             return {
                 window_mention: tlink_result(chemo, window_mention)
                 for window_mention in window_mentions
@@ -475,17 +479,32 @@ class TimelineDelegator(cas_annotator.CasAnnotator):
                 )
             )
         }
-        if len(list(relevant_timexes)) == 0:
-            print(
-                f"WARNING: No normalized timexes discovered in {patient_id} file {note_name}"
+
+        if (
+            len(list(relevant_timexes)) == 0
+            or len(
+                list(
+                    chain.from_iterable(
+                        map(local_window_mentions, positive_chemo_mentions)
+                    )
+                )
             )
+            == 0
+        ):
+            print(
+                f"WARNING: Timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
+            )
+            self._add_empty_discovery(cas)
+            return
         for chemo in positive_chemo_mentions:
+            chemo_dtr, dtr_inst = "", ""  # purely so pyright stops complaining
             if self.use_dtr:
                 chemo_dtr, dtr_inst = dtr_result(chemo)
             tlink_dict = tlink_result_dict(chemo)
             for timex, tlink_inst_pair in tlink_dict.items():
                 tlink, tlink_inst = tlink_inst_pair
                 chemo_text = normalize_mention(chemo)
+                # if we made it this fair these attributes are populated
                 timex_text = timex.time.normalizedForm
                 if self.use_dtr:
                     instance = [
@@ -514,3 +533,35 @@ class TimelineDelegator(cas_annotator.CasAnnotator):
                         tlink_inst,
                     ]
                 self.raw_events.append(instance)
+
+    def _add_empty_discovery(self, cas: Cas):
+        cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
+        document_creation_time = cas_source_data.sourceOriginalDate
+        patient_id, note_name = pt_and_note(cas)
+        if self.use_dtr:
+            instance = [
+                document_creation_time,
+                patient_id,
+                "none",
+                "none",
+                "none",
+                "none",
+                "none",
+                "none",
+                note_name,
+                "none",
+                "none",
+            ]
+        else:
+            instance = [
+                document_creation_time,
+                patient_id,
+                "none",
+                "none",
+                "none",
+                "none",
+                "none",
+                note_name,
+                "none",
+            ]
+        self.raw_events.append(instance)
