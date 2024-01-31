@@ -177,7 +177,7 @@ load PbjStarter
 
 add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/timelines_py" Wait=yes
 
-set TimelinesSecondStep=timelines.timelines_pipeline
+set TimelinesSecondStep=timelines.timelines_python_pipeline
 
 add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory"
 
@@ -185,6 +185,8 @@ set minimumSpan=2
 set exclusionTags=“”
 
 // Just the components we need from DefaultFastPipeline
+
+// Write nice big banners when ctakes starts and finishes.
 set WriteBanner=yes
 
 // Load a simple token processing pipeline from another pipeline file
@@ -192,6 +194,7 @@ load DefaultTokenizerPipeline
 
 // Add non-core annotators
 add ContextDependentTokenizerAnnotator
+// Dictionary module requires tokens so needs to be loaded after the tokenization stack
 load DictionarySubPipe
 
 add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
@@ -214,7 +217,7 @@ add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/t
 ```
 This sets up the necessary environment variables and installs the relevant Python code as well as its dependencies to the Python environment.
 ```
-set TimelinesSecondStep=timelines.timelines_pipeline
+set TimelinesSecondStep=timelines.timelines_python_pipeline
 
 add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory"
 ```
@@ -251,7 +254,7 @@ Sends the CASes which have been processed by the Java annotators to the Python a
 
 The core Python logic is in the file:
 ```
-timelines/instance-generator/src/user/resources/org/apache/ctakes/timelines/timelines_py/src/timelines/timelines_delegator.py
+timelines/instance-generator/src/user/resources/org/apache/ctakes/timelines/timelines_py/src/timelines/timelines_annotator.py
 ```
 Like the Java annotators the Python annotator implements a `process` method which is the core driver of the annotator for processing each note's contents.  The raw output for the whole cancer type cohort is collected and written to TSV on disk in the `collection_process_complete` method.
 

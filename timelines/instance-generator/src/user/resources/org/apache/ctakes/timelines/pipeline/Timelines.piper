@@ -29,10 +29,6 @@ load DictionarySubPipe
 
 add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
 add DCTAnnotator
-// loading this after the dictionaries so
-// we no longer waste time normalizing timexes
-// for files with no chemos
-// add TimeMentionNormalizer tuis=T061 timeout=25
 add TimeMentionNormalizer timeout=10
 
 add PbjJmsSender SendQueue=JavaToPy SendStop=yes
