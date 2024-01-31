@@ -111,7 +111,7 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
                 .anyMatch( tui -> this.tuiSet.contains( tui ) );
 
             if ( !hasRelevantTUIs ){
-                LOGGER.info(fileName + " : no events with the provided TUIs " + this.tuis + "skipping to save time");
+                LOGGER.info(fileName + " : no events with the provided TUIs " + this.tuis + " skipping to save time");
                 return;
             }
         }
