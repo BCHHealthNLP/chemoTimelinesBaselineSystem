@@ -157,33 +157,33 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"Modality filtering turned off, proceeding for patient {patient_id} note {note_name}"
             )
             self._write_actual_proc_mentions(cas, proc_mentions)
+            return
+        conmod_instances = (
+            TimelineAnnotator._get_conmod_instance(chemo, cas)
+            for chemo in proc_mentions
+        )
+
+        conmod_classifications = (
+            result["label"]
+            for result in filter(None, self.conmod_classifier(conmod_instances))
+        )
+        actual_proc_mentions = [
+            chemo
+            for chemo, modality in zip(proc_mentions, conmod_classifications)
+            if modality == "ACTUAL"
+        ]
+
+        if len(actual_proc_mentions) > 0:
+            print(
+                f"Found concrete chemotherapy mentions in patient {patient_id} note {note_name} - proceeding"
+            )
+            self._write_actual_proc_mentions(cas, actual_proc_mentions)
         else:
-            conmod_instances = (
-                TimelineAnnotator._get_conmod_instance(chemo, cas)
-                for chemo in proc_mentions
+            # empty discovery writing logic so no patients are skipped for the eval script
+            self._add_empty_discovery(cas)
+            print(
+                f"No concrete chemotherapy mentions found in patient {patient_id} note {note_name} - skipping"
             )
-
-            conmod_classifications = (
-                result["label"]
-                for result in filter(None, self.conmod_classifier(conmod_instances))
-            )
-            actual_proc_mentions = [
-                chemo
-                for chemo, modality in zip(proc_mentions, conmod_classifications)
-                if modality == "ACTUAL"
-            ]
-
-            if len(actual_proc_mentions) > 0:
-                print(
-                    f"Found concrete chemotherapy mentions in patient {patient_id} note {note_name} - proceeding"
-                )
-                self._write_actual_proc_mentions(cas, actual_proc_mentions)
-            else:
-                # empty discovery writing logic so no patients are skipped for the eval script
-                self._add_empty_discovery(cas)
-                print(
-                    f"No concrete chemotherapy mentions found in patient {patient_id} note {note_name} - skipping"
-                )
 
     def _write_actual_proc_mentions(
         self, cas: Cas, positive_chemo_mentions: List[FeatureStructure]
@@ -242,8 +242,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"WARNING: No normalized timexes discovered in {patient_id} file {note_name}"
             )
         # empty discovery writing logic so no patients are skipped for the eval script
-        if all(map(lambda value: len(value) == 0, tlink_result_dict.values())):
+        if not any(tlink_result_dict.values()):
             self._add_empty_discovery(cas)
+            return
         for chemo in positive_chemo_mentions:
             if self.use_dtr:
                 chemo_dtr, dtr_inst = dtr_result(chemo)
