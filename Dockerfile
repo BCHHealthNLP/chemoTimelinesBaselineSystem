@@ -32,7 +32,7 @@ disable_system_repos=0\n'\
 # Clean all yum cache
 RUN yum update -y && \
     yum install -y yum-utils && \
-    yum install -y which java-1.8.0-openjdk java-1.8.0-openjdk-devel unzip && \
+    yum install -y which java-11-openjdk java-11-openjdk-devel unzip && \
     curl -fsSL https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz | tar xzf - -C /usr/share && \
     mv /usr/share/apache-maven-$MAVEN_VERSION /usr/share/maven && \
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn && \
