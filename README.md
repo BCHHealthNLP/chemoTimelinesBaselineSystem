@@ -83,7 +83,7 @@ Due to a current issue in the inter process communication, the process will fini
 ## Running the system outside of a Docker image
 
 This is for the most part actually how we have ran the system during development, and can be resorted to in the event of issues with creating or running a Docker image.  Use the following steps for setup:
-- Make sure you have Java JDK 8  (we use OpenJDK) and the latest version of maven installed and that Java 8 is set as your default system Java
+- Make sure you have Java JDK 11  (we use OpenJDK) and the latest version of maven installed and that Java 11 is set as your default system Java
 - Create a conda 3.9 environment with `conda create -n timelines python=3.9`
 - Change directory into `timelines` under the project root
 - Create an ActiveMQ broker named `mybroker` in your current directory via:
