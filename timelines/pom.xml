@@ -11,9 +11,10 @@
   <packaging>pom</packaging>
   <properties>
     <!--The Scala version is not the latest on purpose I'm afraid-->
-    <scala.version>2.12.8</scala.version>
-    <maven.compiler.source>8</maven.compiler.source>
-    <maven.compiler.target>8</maven.compiler.target>
+    <!-- <scala.version>2.12.8</scala.version> -->
+    <scala.version>2.13.0</scala.version>
+    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>11</maven.compiler.target>
     <ctakes.version>5.0.0-SNAPSHOT</ctakes.version>
     <skip.assembly>true</skip.assembly>
   </properties>
@@ -26,6 +27,11 @@
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
       <version>${scala.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.scala-sbt</groupId>
+      <artifactId>compiler-bridge_2.13</artifactId>
+      <version>1.9.6</version>
     </dependency>
     <dependency>
       <groupId>org.apache.ctakes</groupId>

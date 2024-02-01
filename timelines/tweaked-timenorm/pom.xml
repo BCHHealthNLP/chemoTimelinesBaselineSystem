@@ -9,8 +9,8 @@
   <artifactId>tweaked-timenorm</artifactId>
   <packaging>jar</packaging>
   <properties>
-    <maven.compiler.source>8</maven.compiler.source>
-    <maven.compiler.target>8</maven.compiler.target>
+    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>11</maven.compiler.target>
     <skip.assembly>true</skip.assembly>
   </properties>
   <description>Find and converts natural language expressions of dates and times to their normalized form.</description>
