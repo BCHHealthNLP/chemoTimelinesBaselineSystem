@@ -39,9 +39,9 @@ RUN yum update -y && \
     yum install -y gcc git python39 python39-devel && \
     alternatives --set python /usr/bin/python3.9 && \
     pip3 install --upgrade pip && \
-    curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.19.1/apache-artemis-2.19.1-bin.zip && \
-    unzip apache-artemis-2.19.1-bin.zip && \
-    apache-artemis-2.19.1/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous && \
+    curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.32.0/apache-artemis-2.32.0-bin.zip && \
+    unzip apache-artemis-2.32.0-bin.zip && \
+    apache-artemis-2.32.0/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous && \
     yum clean all
 
 # Set environment variables for Java and Maven

@@ -88,9 +88,9 @@ This is for the most part actually how we have ran the system during development
 - Change directory into `timelines` under the project root
 - Create an ActiveMQ broker named `mybroker` in your current directory via:
 ```
-curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.19.1/apache-artemis-2.19.1-bin.zip && \
-unzip apache-artemis-2.19.1-bin.zip && \
-apache-artemis-2.19.1/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous
+curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.32.0/apache-artemis-2.32.0-bin.zip && \
+unzip apache-artemis-2.32.0-bin.zip && \
+apache-artemis-2.32.0/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous
 ```
 - (temporary fix until we fix the PBJ and timelines dependencies issue) Install the system's Python dependencies via:
 ```
