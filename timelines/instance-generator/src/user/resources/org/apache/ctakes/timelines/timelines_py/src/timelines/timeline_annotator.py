@@ -252,7 +252,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             == 0
         ):
             print(
-                f"WARNING: Timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
+                f"WARNING: No timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
             )
             self._add_empty_discovery(cas)
             return
