@@ -54,8 +54,6 @@ import org.apache.uima.resource.ResourceInitializationException;
 public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnnotator_ImplBase {
     static private final Logger LOGGER = Logger.getLogger( "TimeMentionNormalizer" );
 
-    // generalize to multiple at some point, check how the dictionary system
-    // does it with filtering based on syntactic category
     public static final String PARAM_TUIS = "tuis";
 
     @ConfigurationParameter(
