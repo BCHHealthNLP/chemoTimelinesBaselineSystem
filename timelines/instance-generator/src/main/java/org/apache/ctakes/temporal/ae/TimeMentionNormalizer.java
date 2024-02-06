@@ -58,7 +58,7 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
 
     @ConfigurationParameter(
                             name = PARAM_TUIS,
-                            description = "The way we store files for processing.  Aligned pair of directories ",
+                            description = "If an event has one of these TUIs it will be kept, otherwise removed",
                             defaultValue = "T061",
                             mandatory = false
     )
@@ -68,7 +68,7 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
     public static final int DEFAULT_TIMEOUT = 5;
     @ConfigurationParameter(
                             name = PARAM_TIMEOUT,
-                            description = "The way we store files for processing.  Aligned pair of directories ",
+                            description = "How long to wait before canceling the operation for normalizing a time mention",
                             mandatory = false
     )
     private int timeout = DEFAULT_TIMEOUT;
@@ -119,7 +119,7 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
             LOGGER.warn( fileName + ": Empty Document Creation Time" );
         } else {
             String[] docTimeComponents = docTime.split("-");
-            // properly generated
+            // DCTAnnotator generated ( should be this in all cases )
             if (docTimeComponents.length == 3) {
                 _DCT = TimeSpan.of(
                                   Integer.parseInt(docTimeComponents[0]),
@@ -186,10 +186,8 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
             try{
                 parsedDate = TimeSpan.of( year, month, date );
                 String dateMLValue = parsedDate.timeMLValue();
-                // LOGGER.info( fileName + ": successfully rule-parsed " + rawTimeMention + " as " + dateMLValue );
                 return dateMLValue;
             } catch ( Exception ignored ){
-                // LOGGER.error( fileName + ": failed to do a rule-based parse for " + rawTimeMention );
             }
         }
         String unnormalizedTimex = String.join(" ", timeMention.getCoveredText().split("\\s"));
@@ -202,7 +200,7 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
                         timeout,
                         TimeUnit.SECONDS );
             } catch ( Exception ignored ){
-                LOGGER.error( fileName + ": Timenorm could not parse timex " + timeMention.getCoveredText() + " in " + timeout + " seconds or less");
+                LOGGER.error( fileName + ": Timenorm failed to normalize timex " + unnormalizedTimex );
                 return "";
             }
         } catch ( Exception ignored ){
