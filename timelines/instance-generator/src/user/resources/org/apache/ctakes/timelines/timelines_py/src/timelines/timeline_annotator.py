@@ -76,11 +76,13 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         self.tlink_classifier = lambda _: []
         self.conmod_classifier = lambda _: []
         self.raw_events = []
+        self.anafora_dir = "."
 
     def init_params(self, arg_parser):
         self.use_dtr = arg_parser.use_dtr
         self.use_conmod = arg_parser.use_conmod
         self.output_dir = arg_parser.output_dir
+        self.anafora_dir = arg_parser.anafora_dir
 
     def initialize(self):
         if torch.cuda.is_available():
@@ -115,16 +117,10 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     def declare_params(self, arg_parser):
         arg_parser.add_arg("--use_dtr", action="store_true")
         arg_parser.add_arg("--use_conmod", action="store_true")
+        arg_parser.add_arg("--anafora_dir", type=str))
 
     def process(self, cas: Cas):
-        proc_mentions = [
-            event
-            for event in cas.select(cas.typesystem.get_type(ctakes_types.EventMention))
-            if CHEMO_TUI
-            in TimelineAnnotator._get_tuis(
-                event
-            )  # as of 1/10/24, using T061 which is ProcedureMention
-        ]
+        proc_mentions = TimelineAnnotator._get_event_mentions(cas, self.anafora_dir)
 
         if len(proc_mentions) > 0:
             self._write_raw_timelines(cas, proc_mentions)
@@ -302,6 +298,10 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 document_creation_time, patient_id, note_name, self.use_dtr
             )
         )
+
+    @staticmethod
+    def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[FeatureStructure]:
+        return []
 
     @staticmethod
     def _empty_discovery(
