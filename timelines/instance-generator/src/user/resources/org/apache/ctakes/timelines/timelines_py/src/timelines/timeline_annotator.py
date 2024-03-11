@@ -1,6 +1,7 @@
 import os
 import torch
 import sys
+import xmltodict
 import pandas as pd
 
 from itertools import chain
@@ -8,6 +9,7 @@ from transformers import pipeline
 from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
 from typing import List, Tuple, Dict, Optional, Generator, Union, Set
+from collections import defaultdict
 from cassis.typesystem import (
     FeatureStructure,
 )
@@ -117,7 +119,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     def declare_params(self, arg_parser):
         arg_parser.add_arg("--use_dtr", action="store_true")
         arg_parser.add_arg("--use_conmod", action="store_true")
-        arg_parser.add_arg("--anafora_dir", type=str))
+        arg_parser.add_arg("--anafora_dir", type=str)
 
     def process(self, cas: Cas):
         proc_mentions = TimelineAnnotator._get_event_mentions(cas, self.anafora_dir)
@@ -301,7 +303,117 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
     @staticmethod
     def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[FeatureStructure]:
+        event_type = cas.typesystem.get_type(ctakes_types.Event)
+        _, note_name = TimelineAnnotator._pt_and_note(cas)
+        # this is extension agnostic but inefficient
+        def relevant_path(doc_path: str) -> bool:
+            base_name = os.path.basename(doc_path).split(".")[0]
+            return base_name.lower() == note_name.lower()
+
+        def full_path(f: str) -> str:
+            return os.path.join(anafora_dir, f)
+
+        relevants = filter(relevant_path, map(full_path, os.listdir(anafora_dir)))
+        relevant_file = next(relevants, None)
+        if relevant_file is None:
+            return []
+        additional = next(relevants, None)
+        if additional is not None:
+            print(
+                f"Error: multiple Anafora files found for patient note {note_name}, at least two {relevant_file} and {additional}"
+            )
+            return []
         return []
+
+    @staticmethod
+    def anafora_entities(xml_path: str) -> List[FeatureStructure]:
+        with open(xml_path) as fr:
+            xml_data_dict = xmltodict.parse(fr.read())
+
+        if xml_data_dict["data"]["annotations"] is None:
+            return []
+
+        if (
+            not(xml_data_dict["data"]["annotations"]
+            and xml_data_dict["data"]["annotations"]["entity"])
+        ):
+            return []
+        if isinstance(xml_data_dict["data"]["annotations"]["entity"], list):
+            entities = [
+                ent
+                for ent in xml_data_dict["data"]["annotations"]["entity"]
+                if ent["type"] != "Markable"
+            ]
+        else:
+            entities = [xml_data_dict["data"]["annotations"]["entity"]]
+            entities = [ent for ent in entities if ent["type"] != "Markable"]
+        entity_with_duplicate = defaultdict(list)
+        entity_no_duplicate = []
+        for ent in entities:
+            entity_with_duplicate[ent["span"]].append(ent)
+        for ents in entity_with_duplicate.values():
+            if len(ents) == 1:
+                entity_no_duplicate.append(ents[0])
+            else:
+                valid_ent = get_ent_with_doctimerel(ents)
+                entity_no_duplicate.append(valid_ent)
+        for ent in entity_no_duplicate:
+            ## Some entities' IDs don't match their text name
+            # I'm assuming there are no issues like this in the packaged
+            # dev or test, will ask Jiarui about it if I run into any counter-evidence
+            # if (
+            #     ent["id"] == "1@e@ID195_SUM_08-27-2010_1@gaby"
+            #     and "ID177_CON_07-29-2010_2" in txt_path
+            # ):
+            #     ent["id"] = "1@e@ID177_CON_07-29-2010_2@gaby"
+            # if (
+            #     ent["id"] == "1@e@ID152_CON_02-24-2011_1@gaby"
+            #     and "ID152_CON_02-14-2011_1" in txt_path
+            # ):
+            #     ent["id"] = "1@e@ID152_CON_02-14-2011_1@gaby"
+            # elif (
+            #     "1@e@ID168_SV_03-29-2012_1@gaby" == ent["id"]
+            #     and "ID168_SV_03-29-2012_2" in txt_path
+            # ):
+            #     ent["id"] = "1@e@ID168_SV_03-29-2012_2@gaby"
+            # elif (
+            #     "3@e@ID168_SV_03-29-2012_1@gaby" == ent["id"]
+            #     and "ID168_SV_03-29-2012_2" in txt_path
+            # ):
+            #     ent["id"] = "3@e@ID168_SV_03-29-2012_2@gaby"
+            # elif (
+            #     "1@e@ID169_SV_05-28-2015_1@gaby" == ent["id"]
+            #     and "ID169_SV_11-19-2015_1" in txt_path
+            # ):
+            #     ent["id"] = "1@e@ID169_SV_11-19-2015_1@gaby"
+            # E.g. 152@e@ID057_path_168@gold
+            ent_note_id = ent["id"].split("@")[-2]
+            if "-" in ent_note_id:
+                pt_id, pt_type, second, third = ent_note_id.split("_")
+                month, day, year = second.split("-")
+                ent_note_id = (
+                    pt_id + "_" + pt_type + "_" + "_".join([month, day, year]) + "_" + third
+                )
+            cur_ent_char_token_map = token_char_idx_map[ent_note_id]
+            if ent["type"] == "Markable":
+                continue
+            # if (
+            #     ent_note_id in DOC_WT_BLACKSLASH_R["dev/breast/"]
+            #     or ent_note_id in DOC_WT_BLACKSLASH_R["train/breast/"]
+            # ):
+            #     ent_node = get_a_thyme2_entity_node(
+            #         ent,
+            #         text_data_str_map[ent_note_id],
+            #         cur_ent_char_token_map,
+            #         eol_map=end_of_line_count[ent_note_id],
+            #     )
+            else:
+                ent_node = get_a_thyme2_entity_node(
+                    ent, text_data_str_map[ent_note_id], cur_ent_char_token_map
+                )
+            assert ent_node.start_char_idx is not None
+            all_entity_nodes.append(ent_node)
+            return []
 
     @staticmethod
     def _empty_discovery(
