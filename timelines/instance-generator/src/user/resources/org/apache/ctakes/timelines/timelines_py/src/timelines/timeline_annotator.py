@@ -8,13 +8,13 @@ from itertools import chain
 from transformers import pipeline
 from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
-from typing import List, Tuple, Dict, Optional, Generator, Union, Set
+from typing import List, Tuple, Dict, Optional, Generator, Union, Set, Iterable
 from collections import defaultdict
 from cassis.typesystem import (
     FeatureStructure,
 )
 
-from cassis.cas import Cas
+from cassis.cas import Cas, Type
 
 
 DTR_WINDOW_RADIUS = 10
@@ -67,6 +67,99 @@ TLINK_HF_HUB = "HealthNLP/pubmedbert_tlink"
 DTR_HF_HUB = "HealthNLP/pubmedbert_dtr"
 
 CONMOD_HF_HUB = "HealthNLP/pubmedbert_conmod"
+
+
+def debug_add(
+    cas: Cas,
+    annotations: Union[FeatureStructure, Iterable[FeatureStructure]],
+    source: str,
+):
+    # before = cas2dict(cas)
+    amount = -1
+    if isinstance(annotations, FeatureStructure):
+        cas.add(annotations)
+        amount = 1
+    else:
+        annotations = list(annotations)
+        amount = len(annotations)
+        for annotation in annotations:
+            cas.add(annotation)
+
+    # after = cas2dict(cas)
+    # difference = DeepDiff(before, after)
+    # if len(difference) == 0 and amount > 0:
+    #     print(f"{source} : ERROR : no differences in cas after inserting {annotations}")
+    # print(f"{source} : differences after CAS insertion {difference}")
+
+
+def debug_remove(
+    cas: Cas,
+    annotations: Union[FeatureStructure, Iterable[FeatureStructure]],
+    source: str,
+):
+    # before = cas2dict(cas)
+    amount = -1
+    if isinstance(annotations, FeatureStructure):
+        cas.remove(annotations)
+        amount = 1
+    else:
+        annotations = list(annotations)
+        amount = len(annotations)
+        for annotation in annotations:
+            cas.remove(annotation)
+
+    # after = cas2dict(cas)
+    # difference = DeepDiff(before, after)
+    # if len(difference) == 0 and amount > 0:
+    #     print(f"{source} : ERROR : no differences in cas after removing {annotations}")
+    # print(f"{source} : differences after CAS removals {difference}")
+
+
+class Annotation(FeatureStructure):
+    def __init__(self, feature_structure: FeatureStructure):
+        self._feature_structure = feature_structure
+        self.begin: int = getattr(feature_structure, "begin", -1)
+        self.end: int = getattr(feature_structure, "end", -1)
+
+
+class Event(Annotation):
+    def __init__(self, feature_structure: FeatureStructure):
+        super().__init__(feature_structure)
+
+    # unfortunately the CAS by CAS approach to passing the typesystem
+    # prevents us from doing this in a sane way
+    def set_conmod(
+        self, cas: Cas, conmod_value: str, event_type: Type, event_properties_type: Type
+    ):
+        if not hasattr(self._feature_structure, "event") or not hasattr(
+            self._feature_structure.event, "properties"
+        ):
+            event_properties = event_properties_type()
+            debug_add(cas, event_properties, "conmod set")
+            event = event_type()
+            debug_add(cas, event, "conmod set")
+            setattr(event, "properties", event_properties)
+            setattr(self._feature_structure, "event", event)
+        self._feature_structure.event.properties.contextualModality = conmod_value
+
+    def set_dtr(
+        self, cas: Cas, dtr_value: str, event_type: Type, event_properties_type: Type
+    ):
+        if not hasattr(self._feature_structure, "event") or not hasattr(
+            self._feature_structure.event, "properties"
+        ):
+            event_properties = event_properties_type()
+            debug_add(cas, event_properties, "dtr set")
+            event = event_type()
+            debug_add(cas, event, "dtr set")
+            setattr(event, "properties", event_properties)
+            setattr(self._feature_structure, "event", event)
+        self._feature_structure.event.properties.docTimeRel = dtr_value
+
+
+class TimeMention(Annotation):
+    def __init__(self, feature_structure: FeatureStructure):
+        super().__init__(feature_structure)
 
 
 class TimelineAnnotator(cas_annotator.CasAnnotator):
@@ -303,8 +396,8 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
     @staticmethod
     def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[FeatureStructure]:
-        event_type = cas.typesystem.get_type(ctakes_types.Event)
         _, note_name = TimelineAnnotator._pt_and_note(cas)
+
         # this is extension agnostic but inefficient
         def relevant_path(doc_path: str) -> bool:
             base_name = os.path.basename(doc_path).split(".")[0]
@@ -323,19 +416,32 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"Error: multiple Anafora files found for patient note {note_name}, at least two {relevant_file} and {additional}"
             )
             return []
-        return []
+        events = TimelineAnnotator.anafora_entities(relevant_file)
+        return events
 
     @staticmethod
-    def anafora_entities(xml_path: str) -> List[FeatureStructure]:
+    def get_ent_with_doctimerel(ent_list):
+        for ent in ent_list:
+            if ent["type"] != "EVENT":
+                return ent
+            else:
+                if ent["properties"]["DocTimeRel"]:
+                    return ent
+        return ent_list[0]
+
+    @staticmethod
+    # entity_returns here will be:
+    # begin, end, conmod, dtr
+    def anafora_entities(xml_path: str) -> List[Tuple[int,int,str,str]]:
         with open(xml_path) as fr:
             xml_data_dict = xmltodict.parse(fr.read())
 
         if xml_data_dict["data"]["annotations"] is None:
             return []
 
-        if (
-            not(xml_data_dict["data"]["annotations"]
-            and xml_data_dict["data"]["annotations"]["entity"])
+        if not (
+            xml_data_dict["data"]["annotations"]
+            and xml_data_dict["data"]["annotations"]["entity"]
         ):
             return []
         if isinstance(xml_data_dict["data"]["annotations"]["entity"], list):
@@ -355,65 +461,40 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             if len(ents) == 1:
                 entity_no_duplicate.append(ents[0])
             else:
-                valid_ent = get_ent_with_doctimerel(ents)
+                valid_ent = TimelineAnnotator.get_ent_with_doctimerel(ents)
                 entity_no_duplicate.append(valid_ent)
+        # we can get essentially whatever we need from here, see
+        # return Event(
+        #     ID=entity_dict["id"],
+        #     start_char_idx=ent_char_s,
+        #     end_char_idx=ent_char_e,
+        #     start_token_idx=ent_token_start,
+        #     end_token_idx=ent_token_end,
+        #     note_idx=entity_dict["id"].split("@")[-2],
+        #     thyme_id=entity_dict["id"],
+        #     node_type="EVENT",
+        #     parents_type=entity_dict["parentsType"],
+        #     text=ent_text,
+        #     property_type=entity_dict["properties"]["Type"],
+        #     doc_time_rel=entity_dict["properties"]["DocTimeRel"],
+        #     degree=entity_dict["properties"]["Degree"],
+        #     polarity=entity_dict["properties"]["Polarity"],
+        #     contextual_modality=entity_dict["properties"]["ContextualModality"],
+        #     contextual_aspect=entity_dict["properties"]["ContextualAspect"],
+        #     permanence=entity_dict["properties"]["Permanence"],
+        # )
         for ent in entity_no_duplicate:
-            ## Some entities' IDs don't match their text name
-            # I'm assuming there are no issues like this in the packaged
-            # dev or test, will ask Jiarui about it if I run into any counter-evidence
-            # if (
-            #     ent["id"] == "1@e@ID195_SUM_08-27-2010_1@gaby"
-            #     and "ID177_CON_07-29-2010_2" in txt_path
-            # ):
-            #     ent["id"] = "1@e@ID177_CON_07-29-2010_2@gaby"
-            # if (
-            #     ent["id"] == "1@e@ID152_CON_02-24-2011_1@gaby"
-            #     and "ID152_CON_02-14-2011_1" in txt_path
-            # ):
-            #     ent["id"] = "1@e@ID152_CON_02-14-2011_1@gaby"
-            # elif (
-            #     "1@e@ID168_SV_03-29-2012_1@gaby" == ent["id"]
-            #     and "ID168_SV_03-29-2012_2" in txt_path
-            # ):
-            #     ent["id"] = "1@e@ID168_SV_03-29-2012_2@gaby"
-            # elif (
-            #     "3@e@ID168_SV_03-29-2012_1@gaby" == ent["id"]
-            #     and "ID168_SV_03-29-2012_2" in txt_path
-            # ):
-            #     ent["id"] = "3@e@ID168_SV_03-29-2012_2@gaby"
-            # elif (
-            #     "1@e@ID169_SV_05-28-2015_1@gaby" == ent["id"]
-            #     and "ID169_SV_11-19-2015_1" in txt_path
-            # ):
-            #     ent["id"] = "1@e@ID169_SV_11-19-2015_1@gaby"
-            # E.g. 152@e@ID057_path_168@gold
-            ent_note_id = ent["id"].split("@")[-2]
-            if "-" in ent_note_id:
-                pt_id, pt_type, second, third = ent_note_id.split("_")
-                month, day, year = second.split("-")
-                ent_note_id = (
-                    pt_id + "_" + pt_type + "_" + "_".join([month, day, year]) + "_" + third
-                )
-            cur_ent_char_token_map = token_char_idx_map[ent_note_id]
-            if ent["type"] == "Markable":
-                continue
-            # if (
-            #     ent_note_id in DOC_WT_BLACKSLASH_R["dev/breast/"]
-            #     or ent_note_id in DOC_WT_BLACKSLASH_R["train/breast/"]
-            # ):
-            #     ent_node = get_a_thyme2_entity_node(
-            #         ent,
-            #         text_data_str_map[ent_note_id],
-            #         cur_ent_char_token_map,
-            #         eol_map=end_of_line_count[ent_note_id],
-            #     )
-            else:
-                ent_node = get_a_thyme2_entity_node(
-                    ent, text_data_str_map[ent_note_id], cur_ent_char_token_map
-                )
-            assert ent_node.start_char_idx is not None
-            all_entity_nodes.append(ent_node)
-            return []
+            if ent["type"] != "Markable":
+                # ent_node = get_a_thyme2_entity_node(
+                #     ent, text_data_str_map[ent_note_id], cur_ent_char_token_map
+                # )
+                ent_start, ent_end = tuple(int(s) for s in ent["span"].split(","))
+                assert ent_start is not None
+                assert ent_end is not None
+                assert ent_start <= ent_end
+                conmod = ent["properties"]["ContextModality"]
+
+                yield (ent_start, ent_end, ent["properties"][])
 
     @staticmethod
     def _empty_discovery(
