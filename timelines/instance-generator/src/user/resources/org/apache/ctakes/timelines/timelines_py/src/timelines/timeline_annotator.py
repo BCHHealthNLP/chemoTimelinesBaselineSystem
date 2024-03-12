@@ -9,7 +9,7 @@ from transformers import pipeline
 from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
 from typing import List, Tuple, Dict, Optional, Generator, Union, Set, Iterable
-from collections import defaultdict
+from collections import defaultdict, deque
 from cassis.typesystem import (
     FeatureStructure,
 )
@@ -395,7 +395,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         )
 
     @staticmethod
-    def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[FeatureStructure]:
+    def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[Event]:
+        event_type = cas.typesystem.get_type(ctakes_types.Event)
+        event_properties_type = cas.typesystem.get_type(ctakes_types.EventProperties)
         _, note_name = TimelineAnnotator._pt_and_note(cas)
 
         # this is extension agnostic but inefficient
@@ -416,8 +418,19 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"Error: multiple Anafora files found for patient note {note_name}, at least two {relevant_file} and {additional}"
             )
             return []
-        events = TimelineAnnotator.anafora_entities(relevant_file)
-        return events
+        events = deque()
+        for proto_event in TimelineAnnotator._anafora_entities(relevant_file):
+            begin, end, conmod, dtr = proto_event
+            event = event_type()
+            setattr(event, "begin", begin)
+            setattr(event, "end", end)
+            cast_event = Event(event)
+            cast_event.set_dtr(cas, dtr.upper(), event_type, event_properties_type)
+            cast_event.set_conmod(
+                cas, conmod.upper(), event_type, event_properties_type
+            )
+            events.append(cast_event)
+        return [*events]
 
     @staticmethod
     def get_ent_with_doctimerel(ent_list):
@@ -432,18 +445,20 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     @staticmethod
     # entity_returns here will be:
     # begin, end, conmod, dtr
-    def anafora_entities(xml_path: str) -> List[Tuple[int,int,str,str]]:
+    def _anafora_entities(
+        xml_path: str,
+    ) -> Generator[Tuple[int, int, str, str], None, None]:
         with open(xml_path) as fr:
             xml_data_dict = xmltodict.parse(fr.read())
 
         if xml_data_dict["data"]["annotations"] is None:
-            return []
+            return None
 
         if not (
             xml_data_dict["data"]["annotations"]
             and xml_data_dict["data"]["annotations"]["entity"]
         ):
-            return []
+            return None
         if isinstance(xml_data_dict["data"]["annotations"]["entity"], list):
             entities = [
                 ent
@@ -451,8 +466,8 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 if ent["type"] != "Markable"
             ]
         else:
-            entities = [xml_data_dict["data"]["annotations"]["entity"]]
-            entities = [ent for ent in entities if ent["type"] != "Markable"]
+            entities_with_markable = [xml_data_dict["data"]["annotations"]["entity"]]
+            entities = [ent for ent in entities_with_markable if ent["type"] != "Markable"]
         entity_with_duplicate = defaultdict(list)
         entity_no_duplicate = []
         for ent in entities:
@@ -483,18 +498,21 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         #     contextual_aspect=entity_dict["properties"]["ContextualAspect"],
         #     permanence=entity_dict["properties"]["Permanence"],
         # )
-        for ent in entity_no_duplicate:
-            if ent["type"] != "Markable":
-                # ent_node = get_a_thyme2_entity_node(
-                #     ent, text_data_str_map[ent_note_id], cur_ent_char_token_map
-                # )
-                ent_start, ent_end = tuple(int(s) for s in ent["span"].split(","))
-                assert ent_start is not None
-                assert ent_end is not None
-                assert ent_start <= ent_end
-                conmod = ent["properties"]["ContextModality"]
+        def not_markable(entity_dict: Dict) -> bool:
+            return entity_dict["type"] != "Markable"
 
-                yield (ent_start, ent_end, ent["properties"][])
+        for ent in filter(not_markable, entity_no_duplicate):
+            # ent_node = get_a_thyme2_entity_node(
+            #     ent, text_data_str_map[ent_note_id], cur_ent_char_token_map
+            # )
+            ent_start, ent_end = tuple(int(s) for s in ent["span"].split(","))
+            assert ent_start is not None
+            assert ent_end is not None
+            assert ent_start <= ent_end
+            conmod = ent["properties"]["ContextualModality"]
+            dtr = ent["properties"]["DocTimeRel"]
+
+            yield (ent_start, ent_end, conmod, dtr)
 
     @staticmethod
     def _empty_discovery(
