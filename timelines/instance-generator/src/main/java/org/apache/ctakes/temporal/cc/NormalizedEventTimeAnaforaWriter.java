@@ -365,15 +365,10 @@ final public class NormalizedEventTimeAnaforaWriter extends AbstractJCasFileWrit
       final Element properties = doc.createElement( "properties" );
       String typeName = "";
       String unnormalizedTimex = timeMention.getCoveredText();
-      Temporal normalizedTimex = null;
-      try{
-         normalizedTimex = normalizer.parse( unnormalizedTimex, DCT ).get();
-      } catch (Exception ignored){}
-
-
+      String normalizedTimex = getTimeML( DCT, unnormalizedTimex );
       final Element normalizedExpression = doc.createElement( "normalizedExpression" );
       if ( normalizedTimex != null ){
-         normalizedExpression.setTextContent( normalizedTimex.timeMLValue() );
+         normalizedExpression.setTextContent( normalizedTimex );
       } else {
          System.err.println("Resorting to unnormalized timex: " + unnormalizedTimex );
          normalizedExpression.setTextContent( unnormalizedTimex );
@@ -396,6 +391,46 @@ final public class NormalizedEventTimeAnaforaWriter extends AbstractJCasFileWrit
       return time;
    }
 
+    static private String getTimeML( TimeSpan DCT, String unnormalizedTimex ){
+        String[] rawDateElements = unnormalizedTimex.split("/");
+        List<Integer> dateElements = new ArrayList<>();
+        for ( String dateElement : rawDateElements ){
+            try {
+                int elem = Integer.parseInt( dateElement );
+                dateElements.add( elem );
+            } catch ( Exception ignored ){}
+        }
+        // can also do this in a way that grabs stragglers
+        if ( dateElements.size() == 3 && rawDateElements.length == 3 ){
+            // avoiding TimeNorm's issues with component order
+            // ambiguity since these notes were all generated
+            // at American hospitals and therefore modulo mistakes
+            // will all use the American convention
+            int month = dateElements.get( 0 );
+            int date = dateElements.get( 1 );
+            int raw_year = dateElements.get( 2 );
+            int year;
+            if ( rawDateElements[2].length() == 2 ){
+                year = raw_year + 2000;
+            } else {
+                year = raw_year;
+            }
+            TimeSpan parsedDate = null;
+            try{
+                parsedDate = TimeSpan.of( year, month, date );
+                String dateMLValue = parsedDate.timeMLValue();
+                return dateMLValue;
+            } catch ( Exception ignored ){
+            }
+        }
+        Temporal normalizedTimex = null;
+        try{
+            normalizedTimex = normalizer.parse( unnormalizedTimex, DCT ).get();
+        } catch (Exception ignored){
+            return null;
+        }
+        return normalizedTimex.timeMLValue();
+    }
 
    static private Element createBaseElement( final IdentifiedAnnotation annotation,
                                               final String typeName,
