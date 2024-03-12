@@ -2,8 +2,8 @@ java -cp instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-de
      org.apache.ctakes.core.pipeline.PiperFileRunner \
      -p org/apache/ctakes/timelines/pipeline/Timelines \
      -a  mybroker \
-     -v /usr/local/miniconda3/envs/timelines-docker \
-     -i ../input/ \
-     -o ../output \
+     -v ~/miniconda3/envs/timelines-docker \
+     -i ../input/text \
+     -d ../input/anafora/ \
      -l org/apache/ctakes/dictionary/lookup/fast/bsv/Unified_Gold_Dev.xml \
      --pipPbj yes \
