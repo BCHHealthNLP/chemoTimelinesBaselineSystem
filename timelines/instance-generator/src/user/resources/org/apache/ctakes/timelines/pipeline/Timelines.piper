@@ -25,7 +25,7 @@ load DefaultTokenizerPipeline
 // Add non-core annotators
 add ContextDependentTokenizerAnnotator
 // Dictionary module requires tokens so needs to be loaded after the tokenization stack
-load DictionarySubPipe
+// load DictionarySubPipe
 
 add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
 add DCTAnnotator
