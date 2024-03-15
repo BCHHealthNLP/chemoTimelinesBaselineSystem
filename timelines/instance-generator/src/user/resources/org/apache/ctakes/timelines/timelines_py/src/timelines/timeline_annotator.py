@@ -7,6 +7,8 @@ import pandas as pd
 
 from itertools import chain
 from transformers import pipeline
+from ctakes_pbj.pbj_tools.create_type import *
+
 from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
 from typing import (
@@ -337,6 +339,20 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
 
         # Needed for Jiarui's deduplication algorithm
+        def has_xmi_id(annotation: FeatureStructure) -> bool:
+            return hasattr(annotation, "xmiID")
+
+        def get_xmi_id(annotation: FeatureStructure) -> str:
+            return str(getattr(annotation, "xmiID"))
+
+        # print("Chemo xmiIDs")
+        # print("\n".join(map(get_xmi_id, filter(has_xmi_id, positive_chemo_mentions))))
+        # print("Collection of chemos")
+        # print(positive_chemo_mentions)
+        print("Timex xmiIDs")
+        print("\n".join(map(get_xmi_id, filter(has_xmi_id, relevant_timexes))))
+        print("Collection of timexes")
+        print(relevant_timexes)
         annotation_ids = {
             annotation: f"{index}@e@{note_name}@system"
             for index, annotation in enumerate(
@@ -412,6 +428,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     @staticmethod
     def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[Event]:
         event_type = cas.typesystem.get_type(ctakes_types.Event)
+        event_mention_type = cas.typesystem.get_type(ctakes_types.EventMention)
         event_properties_type = cas.typesystem.get_type(ctakes_types.EventProperties)
         _, note_name = TimelineAnnotator._pt_and_note(cas)
 
@@ -425,6 +442,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
         relevants = filter(relevant_path, map(full_path, os.listdir(anafora_dir)))
         relevant_file = next(relevants, None)
+        print(f"NOTE NAME: {note_name} RELEVANT FILE {relevant_file} DIR {anafora_dir}")
         if relevant_file is None:
             return []
         additional = next(relevants, None)
@@ -436,9 +454,10 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         events: Deque[Event] = deque()
         for proto_event in TimelineAnnotator._anafora_entities(relevant_file):
             begin, end, conmod, dtr = proto_event
-            event = event_type()
-            setattr(event, "begin", begin)
-            setattr(event, "end", end)
+            # event = event_type(begin=begin, end=end)
+            event = add_type(cas, event_mention_type, begin, end)
+            # setattr(event, "begin", begin)
+            # setattr(event, "end", end)
             cast_event = Event(event)
             cast_event.set_dtr(cas, dtr.upper(), event_type, event_properties_type)
             cast_event.set_conmod(
@@ -516,10 +535,11 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         #     contextual_aspect=entity_dict["properties"]["ContextualAspect"],
         #     permanence=entity_dict["properties"]["Permanence"],
         # )
-        def not_markable(entity_dict: Dict) -> bool:
-            return entity_dict["type"] != "Markable"
-
-        for ent in filter(not_markable, entity_no_duplicate):
+        # def not_markable(entity_dict: Dict) -> bool:
+        #     return entity_dict["type"] != "Markable"
+        def is_event(entity_dict: Dict) -> bool:
+            return entity_dict["type"].lower() == "event"
+        for ent in filter(is_event, entity_no_duplicate):
             # ent_node = get_a_thyme2_entity_node(
             #     ent, text_data_str_map[ent_note_id], cur_ent_char_token_map
             # )
@@ -527,6 +547,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             assert ent_start is not None
             assert ent_end is not None
             assert ent_start <= ent_end
+            # print(ent)
             conmod = ent["properties"]["ContextualModality"]
             dtr = ent["properties"]["DocTimeRel"]
 
