@@ -229,16 +229,20 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         arg_parser.add_arg("--anafora_dir", type=str)
 
     def process(self, cas: Cas):
+        timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
         proc_mentions = TimelineAnnotator._get_event_mentions(cas, self.anafora_dir)
 
-        if len(proc_mentions) > 0:
-            self._write_raw_timelines(cas, proc_mentions)
+        relevant_timexes = TimelineAnnotator._timexes_with_normalization(
+            cas.select(timex_type)
+        )
+        if len(proc_mentions) > 0 and len(relevant_timexes) > 0:
+            self._write_raw_timelines(cas, proc_mentions, relevant_timexes)
         else:
             # empty discovery writing logic so no patients are skipped for the eval script
             self._add_empty_discovery(cas)
             patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
             print(
-                f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) found in patient {patient_id} note {note_name}  - skipping"
+                f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
             )
 
     def collection_process_complete(self):
@@ -255,13 +259,13 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         print("Finished writing")
         sys.exit()
 
-    def _write_raw_timelines(self, cas: Cas, proc_mentions: List[Event]):
+    def _write_raw_timelines(self, cas: Cas, proc_mentions: List[Event], relevant_timexes: List[TimeMention]):
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
         if not self.use_conmod:
             print(
                 f"Modality filtering turned off, proceeding for patient {patient_id} note {note_name}"
             )
-            self._write_actual_proc_mentions(cas, proc_mentions)
+            self._write_actual_proc_mentions(cas, proc_mentions, relevant_timexes)
             return
         conmod_instances = (
             TimelineAnnotator._get_conmod_instance(chemo, cas)
@@ -285,7 +289,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             print(
                 f"Found concrete chemotherapy mentions in patient {patient_id} note {note_name} - proceeding"
             )
-            self._write_actual_proc_mentions(cas, actual_proc_mentions)
+            self._write_actual_proc_mentions(cas, actual_proc_mentions, relevant_timexes)
         else:
             # empty discovery writing logic so no patients are skipped for the eval script
             self._add_empty_discovery(cas)
@@ -294,14 +298,10 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             )
 
     def _write_actual_proc_mentions(
-        self, cas: Cas, positive_chemo_mentions: List[Event]
+            self, cas: Cas, positive_chemo_mentions: List[Event], relevant_timexes: List[TimeMention]
     ):
-        timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
         cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
         document_creation_time = cas_source_data.sourceOriginalDate
-        relevant_timexes = TimelineAnnotator._timexes_with_normalization(
-            cas.select(timex_type)
-        )
 
         base_tokens, token_map = TimelineAnnotator._tokens_and_map(cas, mode="dtr")
         begin2token, end2token = TimelineAnnotator._invert_map(token_map)
@@ -442,7 +442,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
         relevants = filter(relevant_path, map(full_path, os.listdir(anafora_dir)))
         relevant_file = next(relevants, None)
-        print(f"NOTE NAME: {note_name} RELEVANT FILE {relevant_file} DIR {anafora_dir}")
+        # print(f"NOTE NAME: {note_name} RELEVANT FILE {relevant_file} DIR {anafora_dir}")
         if relevant_file is None:
             return []
         additional = next(relevants, None)
@@ -451,20 +451,27 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"Error: multiple Anafora files found for patient note {note_name}, at least two {relevant_file} and {additional}"
             )
             return []
-        events: Deque[Event] = deque()
+        # events: Deque[Event] = deque()
+        events: List[Event] = []
         for proto_event in TimelineAnnotator._anafora_entities(relevant_file):
             begin, end, conmod, dtr = proto_event
             # event = event_type(begin=begin, end=end)
-            event = add_type(cas, event_mention_type, begin, end)
+            # event = add_type(cas, event_mention_type, begin, end)
             # setattr(event, "begin", begin)
             # setattr(event, "end", end)
-            cast_event = Event(event)
+            event_mention = event_mention_type(begin=begin, end=end)
+            # print(f"before {event_mention}")
+            cas.add(event_mention)
+            # print(f"after {event_mention}")
+            # debug_add(cas, event_mention, "_get_event_mentions")
+            cast_event = Event(event_mention)
             cast_event.set_dtr(cas, dtr.upper(), event_type, event_properties_type)
             cast_event.set_conmod(
                 cas, conmod.upper(), event_type, event_properties_type
             )
             events.append(cast_event)
-        return [*events]
+        # return [*events]
+        return events
 
     @staticmethod
     def get_ent_with_doctimerel(ent_list):
@@ -539,6 +546,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         #     return entity_dict["type"] != "Markable"
         def is_event(entity_dict: Dict) -> bool:
             return entity_dict["type"].lower() == "event"
+
         for ent in filter(is_event, entity_no_duplicate):
             # ent_node = get_a_thyme2_entity_node(
             #     ent, text_data_str_map[ent_note_id], cur_ent_char_token_map

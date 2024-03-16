@@ -99,20 +99,20 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
         final String docTime = sourceData.getSourceOriginalDate();
         DocumentPath documentPath = JCasUtil.select( jCas, DocumentPath.class ).iterator().next();
         final String fileName = FilenameUtils.getBaseName( documentPath.getDocumentPath() );
-        if (this.tuis != null && !this.tuis.trim().isEmpty()){
-            boolean hasRelevantTUIs = JCasUtil
-                .select( jCas, EventMention.class )
-                .stream()
-                .map( OntologyConceptUtil::getUmlsConcepts )
-                .flatMap( Collection::stream )
-                .map( UmlsConcept::getTui )
-                .anyMatch( tui -> this.tuiSet.contains( tui ) );
+        // if (this.tuis != null && !this.tuis.trim().isEmpty()){
+        //     boolean hasRelevantTUIs = JCasUtil
+        //         .select( jCas, EventMention.class )
+        //         .stream()
+        //         .map( OntologyConceptUtil::getUmlsConcepts )
+        //         .flatMap( Collection::stream )
+        //         .map( UmlsConcept::getTui )
+        //         .anyMatch( tui -> this.tuiSet.contains( tui ) );
 
-            if ( !hasRelevantTUIs ){
-                LOGGER.info(fileName + " : no events with the provided TUIs " + this.tuis + " skipping to save time");
-                return;
-            }
-        }
+        //     if ( !hasRelevantTUIs ){
+        //         LOGGER.info(fileName + " : no events with the provided TUIs " + this.tuis + " skipping to save time");
+        //         return;
+        //     }
+        // }
 
         TimeSpan _DCT = null;
         if ( docTime == null || docTime.isEmpty() ){
