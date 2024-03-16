@@ -4,3 +4,4 @@ tomli
 setuptools
 stomp.py~=8.0.0
 dkpro-cassis~=0.7.0
+xmltodict
