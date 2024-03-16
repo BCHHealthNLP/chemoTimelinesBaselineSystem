@@ -94,7 +94,7 @@ apache-artemis-2.19.1/bin/artemis create mybroker --user deepphe --password deep
 ```
 - (temporary fix until we fix the PBJ and timelines dependencies issue) Install the system's Python dependencies via:
 ```
-pip install stomp.py dkpro-cassis transformers[torch] pandas tomli setuptools
+pip install -r requirements.txt
 ```
 - Finally create the Java executable Jars with maven:
 ```
