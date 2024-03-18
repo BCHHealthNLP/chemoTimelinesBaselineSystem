@@ -83,99 +83,6 @@ DTR_HF_HUB = "HealthNLP/pubmedbert_dtr"
 CONMOD_HF_HUB = "HealthNLP/pubmedbert_conmod"
 
 
-def debug_add(
-    cas: Cas,
-    annotations: Union[FeatureStructure, Iterable[FeatureStructure]],
-    source: str,
-):
-    # before = cas2dict(cas)
-    amount = -1
-    if isinstance(annotations, FeatureStructure):
-        cas.add(annotations)
-        amount = 1
-    else:
-        annotations = list(annotations)
-        amount = len(annotations)
-        for annotation in annotations:
-            cas.add(annotation)
-
-    # after = cas2dict(cas)
-    # difference = DeepDiff(before, after)
-    # if len(difference) == 0 and amount > 0:
-    #     print(f"{source} : ERROR : no differences in cas after inserting {annotations}")
-    # print(f"{source} : differences after CAS insertion {difference}")
-
-
-def debug_remove(
-    cas: Cas,
-    annotations: Union[FeatureStructure, Iterable[FeatureStructure]],
-    source: str,
-):
-    # before = cas2dict(cas)
-    amount = -1
-    if isinstance(annotations, FeatureStructure):
-        cas.remove(annotations)
-        amount = 1
-    else:
-        annotations = list(annotations)
-        amount = len(annotations)
-        for annotation in annotations:
-            cas.remove(annotation)
-
-    # after = cas2dict(cas)
-    # difference = DeepDiff(before, after)
-    # if len(difference) == 0 and amount > 0:
-    #     print(f"{source} : ERROR : no differences in cas after removing {annotations}")
-    # print(f"{source} : differences after CAS removals {difference}")
-
-
-class Annotation(FeatureStructure):
-    def __init__(self, feature_structure: FeatureStructure):
-        self._feature_structure = feature_structure
-        self.begin: int = getattr(feature_structure, "begin", -1)
-        self.end: int = getattr(feature_structure, "end", -1)
-
-
-class Event(Annotation):
-    def __init__(self, feature_structure: FeatureStructure):
-        super().__init__(feature_structure)
-
-    # unfortunately the CAS by CAS approach to passing the typesystem
-    # prevents us from doing this in a sane way
-    def set_conmod(
-        self, cas: Cas, conmod_value: str, event_type: Type, event_properties_type: Type
-    ):
-        if not hasattr(self._feature_structure, "event") or not hasattr(
-            self._feature_structure.event, "properties"
-        ):
-            event_properties = event_properties_type()
-            debug_add(cas, event_properties, "conmod set")
-            event = event_type()
-            debug_add(cas, event, "conmod set")
-            setattr(event, "properties", event_properties)
-            setattr(self._feature_structure, "event", event)
-        self._feature_structure.event.properties.contextualModality = conmod_value
-
-    def set_dtr(
-        self, cas: Cas, dtr_value: str, event_type: Type, event_properties_type: Type
-    ):
-        if not hasattr(self._feature_structure, "event") or not hasattr(
-            self._feature_structure.event, "properties"
-        ):
-            event_properties = event_properties_type()
-            debug_add(cas, event_properties, "dtr set")
-            event = event_type()
-            debug_add(cas, event, "dtr set")
-            setattr(event, "properties", event_properties)
-            setattr(self._feature_structure, "event", event)
-        self._feature_structure.event.properties.docTimeRel = dtr_value
-
-
-class TimeMention(Annotation):
-    def __init__(self, feature_structure: FeatureStructure):
-        super().__init__(feature_structure)
-
-
 class TimelineAnnotator(cas_annotator.CasAnnotator):
     def __init__(self):
         self.use_dtr = False
@@ -259,7 +166,12 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     #     print("Finished writing")
     #     sys.exit()
 
-    def _write_raw_timelines(self, cas: Cas, proc_mentions: List[Event], relevant_timexes: List[TimeMention]):
+    def _write_raw_timelines(
+        self,
+        cas: Cas,
+        proc_mentions: List[FeatureStructure],
+        relevant_timexes: List[FeatureStructure],
+    ):
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
         if not self.use_conmod:
             print(
@@ -289,7 +201,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             print(
                 f"Found concrete chemotherapy mentions in patient {patient_id} note {note_name} - proceeding"
             )
-            self._write_actual_proc_mentions(cas, actual_proc_mentions, relevant_timexes)
+            self._write_actual_proc_mentions(
+                cas, actual_proc_mentions, relevant_timexes
+            )
         else:
             # empty discovery writing logic so no patients are skipped for the eval script
             self._add_empty_discovery(cas)
@@ -298,7 +212,10 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             )
 
     def _write_actual_proc_mentions(
-            self, cas: Cas, positive_chemo_mentions: List[Event], relevant_timexes: List[TimeMention]
+        self,
+        cas: Cas,
+        positive_chemo_mentions: List[FeatureStructure],
+        relevant_timexes: List[FeatureStructure],
     ):
         cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
         document_creation_time = cas_source_data.sourceOriginalDate
@@ -306,12 +223,14 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         base_tokens, token_map = TimelineAnnotator._tokens_and_map(cas, mode="dtr")
         begin2token, end2token = TimelineAnnotator._invert_map(token_map)
 
-        def local_window_mentions(chemo: Event) -> Generator[TimeMention, None, None]:
+        def local_window_mentions(
+            chemo: FeatureStructure,
+        ) -> Generator[FeatureStructure, None, None]:
             return TimelineAnnotator._get_tlink_window_mentions(
                 chemo, relevant_timexes, begin2token, end2token, token_map
             )
 
-        def dtr_result(chemo: Event) -> Tuple[str, str]:
+        def dtr_result(chemo: FeatureStructure) -> Tuple[str, str]:
             inst = TimelineAnnotator._get_dtr_instance(
                 chemo, base_tokens, begin2token, end2token
             )
@@ -319,7 +238,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             label = cast(str, result["label"])
             return label, inst
 
-        def tlink_result(chemo: Event, timex: TimeMention) -> Tuple[str, str]:
+        def tlink_result(
+            chemo: FeatureStructure, timex: FeatureStructure
+        ) -> Tuple[str, str]:
             inst = TimelineAnnotator._get_tlink_instance(
                 chemo, timex, base_tokens, begin2token, end2token
             )
@@ -329,7 +250,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 label = LABEL_TO_INVERTED_LABEL[label]
             return label, inst
 
-        def tlink_result_dict(chemo: Event) -> Dict[TimeMention, Tuple[str, str]]:
+        def tlink_result_dict(
+            chemo: FeatureStructure,
+        ) -> Dict[FeatureStructure, Tuple[str, str]]:
             window_mentions = local_window_mentions(chemo)
             return {
                 window_mention: tlink_result(chemo, window_mention)
@@ -426,7 +349,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         )
 
     @staticmethod
-    def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[Event]:
+    def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[FeatureStructure]:
         event_type = cas.typesystem.get_type(ctakes_types.Event)
         event_mention_type = cas.typesystem.get_type(ctakes_types.EventMention)
         event_properties_type = cas.typesystem.get_type(ctakes_types.EventProperties)
@@ -452,24 +375,20 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             )
             return []
         # events: Deque[Event] = deque()
-        events: List[Event] = []
+        events: List[FeatureStructure] = []
         for proto_event in TimelineAnnotator._anafora_entities(relevant_file):
             begin, end, conmod, dtr = proto_event
-            # event = event_type(begin=begin, end=end)
-            # event = add_type(cas, event_mention_type, begin, end)
-            # setattr(event, "begin", begin)
-            # setattr(event, "end", end)
             event_mention = event_mention_type(begin=begin, end=end)
-            # print(f"before {event_mention}")
             cas.add(event_mention)
-            # print(f"after {event_mention}")
-            # debug_add(cas, event_mention, "_get_event_mentions")
-            cast_event = Event(event_mention)
-            cast_event.set_dtr(cas, dtr.upper(), event_type, event_properties_type)
-            cast_event.set_conmod(
-                cas, conmod.upper(), event_type, event_properties_type
-            )
-            events.append(cast_event)
+            event_properties = event_properties_type()
+            event = event_type()
+            setattr(event, "properties", event_properties)
+            setattr(event_mention, "event", event)
+            # since there's no built in way
+            # currently to set a nested attribute
+            event_mention.event.properties.contextualModality = conmod.upper()
+            event_mention.event.properties.docTimeRel = dtr.upper()
+            events.append(event_mention)
         # return [*events]
         return events
 
@@ -522,40 +441,14 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 valid_ent = TimelineAnnotator.get_ent_with_doctimerel(ents)
                 entity_no_duplicate.append(valid_ent)
 
-        # we can get essentially whatever we need from here, see
-        # return Event(
-        #     ID=entity_dict["id"],
-        #     start_char_idx=ent_char_s,
-        #     end_char_idx=ent_char_e,
-        #     start_token_idx=ent_token_start,
-        #     end_token_idx=ent_token_end,
-        #     note_idx=entity_dict["id"].split("@")[-2],
-        #     thyme_id=entity_dict["id"],
-        #     node_type="EVENT",
-        #     parents_type=entity_dict["parentsType"],
-        #     text=ent_text,
-        #     property_type=entity_dict["properties"]["Type"],
-        #     doc_time_rel=entity_dict["properties"]["DocTimeRel"],
-        #     degree=entity_dict["properties"]["Degree"],
-        #     polarity=entity_dict["properties"]["Polarity"],
-        #     contextual_modality=entity_dict["properties"]["ContextualModality"],
-        #     contextual_aspect=entity_dict["properties"]["ContextualAspect"],
-        #     permanence=entity_dict["properties"]["Permanence"],
-        # )
-        # def not_markable(entity_dict: Dict) -> bool:
-        #     return entity_dict["type"] != "Markable"
         def is_event(entity_dict: Dict) -> bool:
             return entity_dict["type"].lower() == "event"
 
         for ent in filter(is_event, entity_no_duplicate):
-            # ent_node = get_a_thyme2_entity_node(
-            #     ent, text_data_str_map[ent_note_id], cur_ent_char_token_map
-            # )
             ent_start, ent_end = tuple(int(s) for s in ent["span"].split(","))
             assert ent_start is not None
             assert ent_end is not None
             assert ent_start <= ent_end
-            # print(ent)
             conmod = ent["properties"]["ContextualModality"]
             dtr = ent["properties"]["DocTimeRel"]
 
@@ -592,7 +485,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         ]
 
     @staticmethod
-    def _normalize_mention(mention: Union[Annotation, None]) -> str:
+    def _normalize_mention(mention: Union[FeatureStructure, None]) -> str:
         if mention is None:
             return "ERROR"
         raw_mention_text = mention.get_covered_text()
@@ -600,20 +493,18 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
     @staticmethod
     def _tokens_and_map(
-        cas: Cas, context: Optional[Annotation] = None, mode="conmod"
+        cas: Cas, context: Optional[FeatureStructure] = None, mode="conmod"
     ) -> Tuple[List[str], List[Tuple[int, int]]]:
         base_tokens = []
         token_map = []
         newline_tag = "<cr>" if mode == "conmod" else "<newline>"
-        newline_tokens = cast(List[Annotation], cas.select(ctakes_types.NewlineToken))
+        newline_tokens = cas.select(ctakes_types.NewlineToken)
         newline_token_indices = {(item.begin, item.end) for item in newline_tokens}
         # duplicates = defaultdict(list)
         raw_token_collection = (
-            cast(List[Annotation], cas.select(ctakes_types.BaseToken))
+            cas.select(ctakes_types.BaseToken)
             if context is None
-            else cast(
-                List[Annotation], cas.select_covered(ctakes_types.BaseToken, context)
-            )
+            else cas.select_covered(ctakes_types.BaseToken, context)
         )
         token_collection: Dict[int, Tuple[int, str]] = {}
         for base_token in raw_token_collection:
@@ -624,12 +515,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 if (begin, end) not in newline_token_indices
                 else newline_tag
             )
-            # TODO - ask Sean and Guergana why there might be duplicate Newline tokens
-            # if begin in token_collection:
-            #     prior_end, prior_text = token_collection[begin]
-            #     print(
-            #         f"WARNING: two tokens {(token_text, begin, end)} and {(prior_text, begin, prior_end)} share the same begin index, overwriting with latest"
-            #     )
             token_collection[begin] = (end, token_text)
         for begin in sorted(token_collection):
             end, token_text = token_collection[begin]
@@ -646,9 +531,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         end_map: Dict[int, int] = {}
         for token_index, token_boundaries in enumerate(token_map):
             begin, end = token_boundaries
-            # these warnings are kind of by-passed by previous logic
-            # since any time two tokens shared a begin and or an end
-            # it was always a newline token and its exact duplicate
             if begin in begin_map:
                 print(
                     f"pre-existing token begin entry {begin} -> {begin_map[begin]} against {token_index} in reverse token map"
@@ -671,10 +553,10 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     # previous conmod model used Pitt sentencing and tokenization
     # for the next conmod model it should use DTR instances
     @staticmethod
-    def _get_conmod_instance(event: Event, cas: Cas) -> str:
+    def _get_conmod_instance(event: FeatureStructure, cas: Cas) -> str:
         raw_sentence = list(cas.select_covering(ctakes_types.Sentence, event))[0]
         tokens, token_map = TimelineAnnotator._tokens_and_map(
-            cas, cast(Annotation, raw_sentence), mode="conmod"
+            cas, raw_sentence, mode="conmod"
         )
         begin2token, end2token = TimelineAnnotator._invert_map(token_map)
         event_begin = begin2token[event.begin]
@@ -692,24 +574,20 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     @staticmethod
     def _timexes_with_normalization(
         timexes: List[FeatureStructure],
-    ) -> List[TimeMention]:
+    ) -> List[FeatureStructure]:
         def relevant(timex):
             return hasattr(timex, "time") and hasattr(timex.time, "normalizedForm")
 
-        return [TimeMention(timex) for timex in timexes if relevant(timex)]
+        return [timex for timex in timexes if relevant(timex)]
 
     @staticmethod
     def _get_tlink_instance(
-        event: Event,
-        timex: TimeMention,
+        event: FeatureStructure,
+        timex: FeatureStructure,
         tokens: List[str],
         begin2token: Dict[int, int],
         end2token: Dict[int, int],
     ) -> str:
-        # Have an event and a timex/other event which are up to 60 tokens apart from each other
-        # have two tokens before first annotation, first annotation plus tags
-        # then all the text between the two annotations
-        # second annotation plus tags, the last two tokens after the second annotation
         event_begin = begin2token[event.begin]
         event_end = end2token[event.end] + 1
         event_tags = ("<e>", "</e>")
@@ -726,15 +604,12 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         (
             first_open_tag,
             first_close_tag,
-        ) = first_tags  # if is_timex else ("<e1>", "</e1>")
-
+        ) = first_tags
         (second_begin, second_end, second_tags) = second_packet
         (
             second_open_tag,
             second_close_tag,
-        ) = second_tags  # if is_timex else ("<e2>", "</e2>")
-
-        # to avoid wrap arounds
+        ) = second_tags
         start_token_idx = max(0, first_begin - TLINK_PAD_LENGTH)
         end_token_idx = min(len(tokens) - 1, second_end + TLINK_PAD_LENGTH)
 
@@ -759,7 +634,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
     @staticmethod
     def _get_dtr_instance(
-        event: Event,
+        event: FeatureStructure,
         tokens: List[str],
         begin2token: Dict[int, int],
         end2token: Dict[int, int],
@@ -778,12 +653,12 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
     @staticmethod
     def _get_tlink_window_mentions(
-        event: Event,
-        relevant_timexes: List[TimeMention],
+        event: FeatureStructure,
+        relevant_timexes: List[FeatureStructure],
         begin2token: Dict[int, int],
         end2token: Dict[int, int],
         token2char: List[Tuple[int, int]],
-    ) -> Generator[TimeMention, None, None]:
+    ) -> Generator[FeatureStructure, None, None]:
         event_begin_token_index = begin2token[event.begin]
         event_end_token_index = end2token[event.end]
 
@@ -807,9 +682,11 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     def _deleted_neighborhood(
         central_mention: FeatureStructure, mentions: List[FeatureStructure]
     ) -> Generator[FeatureStructure, None, None]:
-        for mention in mentions:
-            if central_mention != mention:
-                yield mention
+        def not_central(mention: FeatureStructure) -> bool:
+            return central_mention != mention
+
+        for mention in filter(not_central, mentions):
+            yield mention
 
     @staticmethod
     def _pt_and_note(cas: Cas):
@@ -820,15 +697,13 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         return patient_id, note_name
 
     @staticmethod
-    def _get_tuis(event: Event) -> Set[str]:
+    def _get_tuis(event: FeatureStructure) -> Set[str]:
         def get_tui(event):
             return getattr(event, "tui", None)
 
         ont_concept_arr = getattr(event, "ontologyConceptArr", None)
         elements = getattr(ont_concept_arr, "elements", [])
-        if len(elements) == 0:
-            return set()
-        return {tui for tui in map(get_tui, elements) if tui is not None}
+        return {tui for tui in filter(None, map(get_tui, elements))}
 
     @staticmethod
     def _get_pipeline(path: str, device: int) -> Pipeline:
