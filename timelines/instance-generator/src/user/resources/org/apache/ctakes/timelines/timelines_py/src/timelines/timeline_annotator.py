@@ -1,9 +1,11 @@
 import os
+import sys
 from collections import defaultdict
 from itertools import chain
-from typing import (Dict, Generator, Iterable, List, Optional, Set,
-                    Tuple, Union, cast)
+from typing import (Dict, Generator, Iterable, List, Optional, Set, Tuple,
+                    Union, cast)
 
+import pandas as pd
 import torch
 import xmltodict
 from cassis.cas import Cas
@@ -135,6 +137,19 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
             )
 
+    def collection_process_complete(self):
+        output_columns = DTR_OUTPUT_COLUMNS if self.use_dtr else NO_DTR_OUTPUT_COLUMNS
+        output_tsv_name = "unsummarized_output.tsv"
+        output_path = "".join([self.output_dir, "/", output_tsv_name])
+        print("Finished processing notes")
+        print(f"Writing results for all input in {output_path}")
+        pt_df = pd.DataFrame.from_records(
+            self.raw_events,
+            columns=output_columns,
+        )
+        pt_df.to_csv(output_path, index=False, sep="\t")
+        print("Finished writing")
+        sys.exit()
     def _write_raw_timelines(
         self,
         cas: Cas,
@@ -230,6 +245,15 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
 
+        timexes_in_some_window = list(
+            chain.from_iterable(map(local_window_mentions, positive_chemo_mentions))
+        )
+        if len(relevant_timexes) == 0 or len(timexes_in_some_window) == 0:
+            print(
+                f"WARNING: No timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
+            )
+            self._add_empty_discovery(cas)
+            return
         # Needed for Jiarui's deduplication algorithm
         annotation_ids = {
             annotation: f"{index}@e@{note_name}@system"
@@ -240,23 +264,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 )
             )
         }
-        timexes_in_some_window = list(
-                    chain.from_iterable(
-                        map(local_window_mentions, positive_chemo_mentions)
-                    )
-                )
-        if (
-            len(relevant_timexes) == 0
-            or len(
-                timexes_in_some_window
-            )
-            == 0
-        ):
-            print(
-                f"WARNING: No timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
-            )
-            self._add_empty_discovery(cas)
-            return
         for chemo in positive_chemo_mentions:
             chemo_dtr, dtr_inst = "", ""  # purely so pyright stops complaining
             if self.use_dtr:
