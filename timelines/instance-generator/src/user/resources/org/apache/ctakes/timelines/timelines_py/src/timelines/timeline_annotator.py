@@ -1,35 +1,18 @@
 import os
-import torch
-import sys
-from transformers.pipelines.base import Pipeline
-import xmltodict
-import pandas as pd
-
+from collections import defaultdict
 from itertools import chain
-from transformers import pipeline
-from ctakes_pbj.pbj_tools.create_type import *
+from typing import (Dict, Generator, Iterable, List, Optional, Set,
+                    Tuple, Union, cast)
 
+import torch
+import xmltodict
+from cassis.cas import Cas
+from cassis.typesystem import FeatureStructure
 from ctakes_pbj.component import cas_annotator
+from ctakes_pbj.pbj_tools.create_type import *
 from ctakes_pbj.type_system import ctakes_types
-from typing import (
-    Deque,
-    List,
-    Tuple,
-    Dict,
-    Optional,
-    Generator,
-    Union,
-    Set,
-    Iterable,
-    cast,
-)
-from collections import defaultdict, deque
-from cassis.typesystem import (
-    FeatureStructure,
-)
-
-from cassis.cas import Cas, Type
-
+from transformers import pipeline
+from transformers.pipelines.base import Pipeline
 
 DTR_WINDOW_RADIUS = 10
 MAX_TLINK_DISTANCE = 60
@@ -152,20 +135,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
             )
 
-    # def collection_process_complete(self):
-    #     output_columns = DTR_OUTPUT_COLUMNS if self.use_dtr else NO_DTR_OUTPUT_COLUMNS
-    #     output_tsv_name = "unsummarized_output.tsv"
-    #     output_path = "".join([self.output_dir, "/", output_tsv_name])
-    #     print("Finished processing notes")
-    #     print(f"Writing results for all input in {output_path}")
-    #     pt_df = pd.DataFrame.from_records(
-    #         self.raw_events,
-    #         columns=output_columns,
-    #     )
-    #     pt_df.to_csv(output_path, index=False, sep="\t")
-    #     print("Finished writing")
-    #     sys.exit()
-
     def _write_raw_timelines(
         self,
         cas: Cas,
@@ -262,20 +231,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
 
         # Needed for Jiarui's deduplication algorithm
-        # def has_xmi_id(annotation: FeatureStructure) -> bool:
-        #     return hasattr(annotation, "xmiID")
-
-        # def get_xmi_id(annotation: FeatureStructure) -> str:
-        #     return str(getattr(annotation, "xmiID"))
-
-        # print("Chemo xmiIDs")
-        # print("\n".join(map(get_xmi_id, filter(has_xmi_id, positive_chemo_mentions))))
-        # print("Collection of chemos")
-        # print(positive_chemo_mentions)
-        # print("Timex xmiIDs")
-        # print("\n".join(map(get_xmi_id, filter(has_xmi_id, relevant_timexes))))
-        # print("Collection of timexes")
-        # print(relevant_timexes)
         annotation_ids = {
             annotation: f"{index}@e@{note_name}@system"
             for index, annotation in enumerate(
@@ -285,14 +240,15 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 )
             )
         }
-        if (
-            len(list(relevant_timexes)) == 0
-            or len(
-                list(
+        timexes_in_some_window = list(
                     chain.from_iterable(
                         map(local_window_mentions, positive_chemo_mentions)
                     )
                 )
+        if (
+            len(relevant_timexes) == 0
+            or len(
+                timexes_in_some_window
             )
             == 0
         ):
@@ -374,9 +330,8 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"Error: multiple Anafora files found for patient note {note_name}, at least two {relevant_file} and {additional}"
             )
             return []
-        # events: Deque[Event] = deque()
-        events: List[FeatureStructure] = []
-        for proto_event in TimelineAnnotator._anafora_entities(relevant_file):
+
+        def insert_event(proto_event: Tuple[int, int, str, str]) -> FeatureStructure:
             begin, end, conmod, dtr = proto_event
             event_mention = event_mention_type(begin=begin, end=end)
             cas.add(event_mention)
@@ -388,9 +343,11 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             # currently to set a nested attribute
             event_mention.event.properties.contextualModality = conmod.upper()
             event_mention.event.properties.docTimeRel = dtr.upper()
-            events.append(event_mention)
-        # return [*events]
-        return events
+            return event_mention
+
+        return list(
+            map(insert_event, TimelineAnnotator._anafora_entities(relevant_file))
+        )
 
     @staticmethod
     def get_ent_with_doctimerel(ent_list):
