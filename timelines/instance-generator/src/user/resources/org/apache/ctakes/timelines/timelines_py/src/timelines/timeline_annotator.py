@@ -245,19 +245,19 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
             )
 
-    def collection_process_complete(self):
-        output_columns = DTR_OUTPUT_COLUMNS if self.use_dtr else NO_DTR_OUTPUT_COLUMNS
-        output_tsv_name = "unsummarized_output.tsv"
-        output_path = "".join([self.output_dir, "/", output_tsv_name])
-        print("Finished processing notes")
-        print(f"Writing results for all input in {output_path}")
-        pt_df = pd.DataFrame.from_records(
-            self.raw_events,
-            columns=output_columns,
-        )
-        pt_df.to_csv(output_path, index=False, sep="\t")
-        print("Finished writing")
-        sys.exit()
+    # def collection_process_complete(self):
+    #     output_columns = DTR_OUTPUT_COLUMNS if self.use_dtr else NO_DTR_OUTPUT_COLUMNS
+    #     output_tsv_name = "unsummarized_output.tsv"
+    #     output_path = "".join([self.output_dir, "/", output_tsv_name])
+    #     print("Finished processing notes")
+    #     print(f"Writing results for all input in {output_path}")
+    #     pt_df = pd.DataFrame.from_records(
+    #         self.raw_events,
+    #         columns=output_columns,
+    #     )
+    #     pt_df.to_csv(output_path, index=False, sep="\t")
+    #     print("Finished writing")
+    #     sys.exit()
 
     def _write_raw_timelines(self, cas: Cas, proc_mentions: List[Event], relevant_timexes: List[TimeMention]):
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
@@ -339,20 +339,20 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
 
         # Needed for Jiarui's deduplication algorithm
-        def has_xmi_id(annotation: FeatureStructure) -> bool:
-            return hasattr(annotation, "xmiID")
+        # def has_xmi_id(annotation: FeatureStructure) -> bool:
+        #     return hasattr(annotation, "xmiID")
 
-        def get_xmi_id(annotation: FeatureStructure) -> str:
-            return str(getattr(annotation, "xmiID"))
+        # def get_xmi_id(annotation: FeatureStructure) -> str:
+        #     return str(getattr(annotation, "xmiID"))
 
         # print("Chemo xmiIDs")
         # print("\n".join(map(get_xmi_id, filter(has_xmi_id, positive_chemo_mentions))))
         # print("Collection of chemos")
         # print(positive_chemo_mentions)
-        print("Timex xmiIDs")
-        print("\n".join(map(get_xmi_id, filter(has_xmi_id, relevant_timexes))))
-        print("Collection of timexes")
-        print(relevant_timexes)
+        # print("Timex xmiIDs")
+        # print("\n".join(map(get_xmi_id, filter(has_xmi_id, relevant_timexes))))
+        # print("Collection of timexes")
+        # print(relevant_timexes)
         annotation_ids = {
             annotation: f"{index}@e@{note_name}@system"
             for index, annotation in enumerate(
