@@ -3,6 +3,7 @@ package org.apache.ctakes.timelines
 set SetJavaHome=no
 set ForceExit=no
 load PbjStarter
+cli anaforaDir=d
 
 add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/timelines_py" Wait=yes
 
@@ -19,6 +20,5 @@ load DefaultTokenizerPipeline
 // Add non-core annotators
 add ContextDependentTokenizerAnnotator
 
-add AnaforaXMLReader anaforaDir=$AnaforaDir
-
+add AnaforaXMLReader 
 add PbjJmsSender SendQueue=JavaToPy SendStop=yes

@@ -15,6 +15,6 @@ add ContextDependentTokenizerAnnotator
 
 add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
 add DCTAnnotator
-add AnaforaXMLReader ana
+add AnaforaXMLReader
 add TimeMentionNormalizer timeout=10
 add NormalizedEventTimeAnaforaWriter
