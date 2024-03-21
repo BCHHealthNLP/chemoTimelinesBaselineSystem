@@ -1,12 +1,10 @@
 import os
 import sys
-from collections import defaultdict
 from itertools import chain
 from typing import Dict, Generator, Iterable, List, Optional, Set, Tuple, Union, cast
 
 import pandas as pd
 import torch
-import xmltodict
 from cassis.cas import Cas
 from cassis.typesystem import FeatureStructure
 from ctakes_pbj.component import cas_annotator
@@ -82,7 +80,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         self.use_dtr = arg_parser.use_dtr
         self.use_conmod = arg_parser.use_conmod
         self.output_dir = arg_parser.output_dir
-        self.anafora_dir = arg_parser.anafora_dir
 
     def initialize(self):
         if torch.cuda.is_available():
@@ -117,7 +114,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     def declare_params(self, arg_parser):
         arg_parser.add_arg("--use_dtr", action="store_true")
         arg_parser.add_arg("--use_conmod", action="store_true")
-        arg_parser.add_arg("--anafora_dir", type=str)
 
     def process(self, cas: Cas):
         timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
@@ -134,7 +130,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             self._add_empty_discovery(cas)
             patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
             print(
-                f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
+                f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or no normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
             )
 
     def collection_process_complete(self):
