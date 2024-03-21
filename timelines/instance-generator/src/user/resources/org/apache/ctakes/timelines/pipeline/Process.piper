@@ -9,7 +9,7 @@ add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/t
 
 set TimelinesSecondStep=timelines.timelines_python_pipeline
 
-add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory --anafora_dir $AnaforaDir"
+add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory"
 
 // Write nice big banners when ctakes starts and finishes.
 set WriteBanner=yes

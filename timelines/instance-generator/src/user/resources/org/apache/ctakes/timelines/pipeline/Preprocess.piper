@@ -1,7 +1,7 @@
 package org.apache.ctakes.timelines
 
 set SetJavaHome=no
-set ForceExit=no
+set ForceExit=yes
 cli anaforaDir=d
 
 // Write nice big banners when ctakes starts and finishes.
