@@ -1,0 +1,20 @@
+package org.apache.ctakes.timelines
+
+set SetJavaHome=no
+set ForceExit=no
+cli AnaforaDir=d
+
+// Write nice big banners when ctakes starts and finishes.
+set WriteBanner=yes
+
+// Load a simple token processing pipeline from another pipeline file
+load DefaultTokenizerPipeline
+
+// Add non-core annotators
+add ContextDependentTokenizerAnnotator
+
+add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
+add DCTAnnotator
+add AnaforaXMLReader anaforaDir=$AnaforaDir
+add TimeMentionNormalizer timeout=10
+add NormalizedEventTimeAnaforaWriter

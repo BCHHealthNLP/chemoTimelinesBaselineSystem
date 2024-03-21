@@ -1,0 +1,24 @@
+package org.apache.ctakes.timelines
+
+set SetJavaHome=no
+set ForceExit=no
+load PbjStarter
+
+add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/timelines_py" Wait=yes
+
+set TimelinesSecondStep=timelines.timelines_python_pipeline
+
+add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory --anafora_dir $AnaforaDir"
+
+// Write nice big banners when ctakes starts and finishes.
+set WriteBanner=yes
+
+// Load a simple token processing pipeline from another pipeline file
+load DefaultTokenizerPipeline
+
+// Add non-core annotators
+add ContextDependentTokenizerAnnotator
+
+add AnaforaXMLReader anaforaDir=$AnaforaDir
+
+add PbjJmsSender SendQueue=JavaToPy SendStop=yes
