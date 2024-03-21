@@ -161,11 +161,11 @@ final public class NormalizedEventTimeAnaforaWriter extends AbstractJCasFileWrit
       return annotations;
    }
 
-   private int addEventElements( final JCas jCas,
+    private int addEventElements( final JCas jCas,
                                   final String documentId,
-                                   final int startId,
-                                   final Element annotations,
-                                   final Document doc ) {
+                                  final int startId,
+                                  final Element annotations,
+                                  final Document doc ) {
       final List<EventMention> eventMentions = new ArrayList<>( JCasUtil.select( jCas, EventMention.class ) );
       eventMentions.sort( Comparator.comparingInt( EventMention::getBegin )
                                     .thenComparingInt( EventMention::getEnd ) );
@@ -303,17 +303,17 @@ final public class NormalizedEventTimeAnaforaWriter extends AbstractJCasFileWrit
    }
 
 
-   private int addTimeElements( final JCas jCas,
+    private int addTimeElements( final JCas jCas,
                                  final String documentId,
                                  final int startId,
                                  final Element annotations,
                                  final Document doc ) {
-      final SourceData sourceData = SourceMetadataUtil.getOrCreateSourceData( jCas );
-      final String docTime = sourceData.getSourceOriginalDate();
-
-      TimeSpan DCT = null;
-
-
+        final SourceData sourceData = SourceMetadataUtil.getOrCreateSourceData( jCas );
+        final String docTime = sourceData.getSourceOriginalDate();
+        
+        TimeSpan DCT = null;
+        
+        
       if ( docTime == null || docTime.isEmpty() ){
          LOGGER.warn( "Empty DCT, not creating the node" );
       } else {
@@ -365,7 +365,12 @@ final public class NormalizedEventTimeAnaforaWriter extends AbstractJCasFileWrit
       final Element properties = doc.createElement( "properties" );
       String typeName = "";
       String unnormalizedTimex = timeMention.getCoveredText();
-      String normalizedTimex = getTimeML( DCT, unnormalizedTimex );
+      String normalizedTimex = timeMention
+          .getTime()
+          .getNormalizedForm();
+      if ( normalizedTimex == null ){
+          normalizedTimex = getTimeML( DCT, unnormalizedTimex );
+      }
       final Element normalizedExpression = doc.createElement( "normalizedExpression" );
       if ( normalizedTimex != null ){
          normalizedExpression.setTextContent( normalizedTimex );
