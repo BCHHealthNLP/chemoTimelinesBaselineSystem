@@ -131,7 +131,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
     try {
         processXmlFile( jCas, xmlFile );
     } catch (Exception e) {
-        if( xmlFile != null) System.err.println(xmlFile.getAbsolutePath() + " " + xmlFile.exists());
+        if( xmlFile != null ) System.err.println(xmlFile.getAbsolutePath() + " " + xmlFile.exists());
         System.err.println(jCasFilename.getAbsolutePath());
         throw new RuntimeException(e);
     }
@@ -170,31 +170,30 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
         // everything
         int begin = Integer.MAX_VALUE;
         int end = Integer.MIN_VALUE;
-        try {
-          //for (String spanString : spanElem.getText().split(";")) {
-          for (String spanString : spanElem.getText().split(";")) {
-            String[] beginEndStrings = spanString.split(",");
-            if (beginEndStrings.length != 2) {
-              error("span not of the format 'number,number'", id);
+        if ( !type.equals( "DOCTIME" ) ){
+            try {
+                //for (String spanString : spanElem.getText().split(";")) {
+                for (String spanString : spanElem.getText().split(";")) {
+                    String[] beginEndStrings = spanString.split(",");
+                    // if (beginEndStrings.length != 2) {
+                    //     error("span not of the format 'number,number'", id);
+                    // }
+                    int spanBegin = Integer.parseInt(beginEndStrings[0]);
+                    int spanEnd = Integer.parseInt(beginEndStrings[1]);
+                    if (spanBegin < begin && spanBegin >= 0) {
+                        begin = spanBegin;
+                    }
+                    if (spanEnd > end && spanEnd <= docLen) {
+                        end = spanEnd;
+                    }
+                }
+                if(begin < 0 || end > docLen){
+                    // error("Illegal begin or end boundary", id);
+                    continue;
+                }
+            } catch (Exception e){
+                throw new RuntimeException(e);
             }
-            int spanBegin = Integer.parseInt(beginEndStrings[0]);
-            int spanEnd = Integer.parseInt(beginEndStrings[1]);
-            if (spanBegin < begin && spanBegin >= 0) {
-              begin = spanBegin;
-            }
-            if (spanEnd > end && spanEnd <= docLen) {
-              end = spanEnd;
-            }
-          }
-          if(begin < 0 || end > docLen){
-            error("Illegal begin or end boundary", id);
-            continue;
-          }
-        } catch (Exception e){
-          System.err.println( "HERE" );
-
-          System.err.println( id );
-          throw new RuntimeException(e);
         }
 
 
@@ -202,7 +201,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
         if (type.equals("EVENT")) {
           String docTimeRel = removeSingleChildText(propertiesElem, "DocTimeRel", id);
           if (docTimeRel == null) {
-            error("no docTimeRel, assuming OVERLAP", id);
+            // error("no docTimeRel, assuming OVERLAP", id);
             docTimeRel = "OVERLAP";
           }
           String eventType = removeSingleChildText(propertiesElem, "Type", id);
@@ -221,9 +220,9 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
             eventProperties.setPolarity(CONST.NE_POLARITY_NEGATION_ABSENT);
           } else if (polarity.equals("NEG")) {
             eventProperties.setPolarity(CONST.NE_POLARITY_NEGATION_PRESENT);
-          } else {
-            error("polarity that was not POS or NEG", id);
-          }
+          } // else {
+          //   error("polarity that was not POS or NEG", id);
+          // }
           eventProperties.setContextualModality(contextualModality);
           eventProperties.setContextualAspect(contextualAspect);
           eventProperties.setPermanence(permanence);
@@ -278,24 +277,24 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
             }
             annotation = null;
         }
-        // else if (type.equals("SECTIONTIME")) {
-        //   TimeMention timeMention = new TimeMention(jCas, begin, end);
-        //   timeMention.setId(curTimexId++);
-        //   timeMention.setTimeClass(type);
-        //   timeMention.addToIndexes();
-        //   annotation = timeMention;
+        else if (type.equals("SECTIONTIME")) {
+          TimeMention timeMention = new TimeMention(jCas, begin, end);
+          timeMention.setId(curTimexId++);
+          timeMention.setTimeClass(type);
+          timeMention.addToIndexes();
+          annotation = timeMention;
 
-        // } else if (type.equals("Markable")) {
-        //   while(end >= begin && (jCas.getDocumentText().charAt(end-1) == '\n' || jCas.getDocumentText().charAt(end-1) == '\r')){
-        //     end--;
-        //   }
-        //   Markable markable = new Markable(jCas, begin, end);
-        //   markable.addToIndexes();
-        //   annotation = markable;
+        } else if (type.equals("Markable")) {
+          while(end >= begin && (jCas.getDocumentText().charAt(end-1) == '\n' || jCas.getDocumentText().charAt(end-1) == '\r')){
+            end--;
+          }
+          Markable markable = new Markable(jCas, begin, end);
+          markable.addToIndexes();
+          annotation = markable;
 
-        // }
+        }
         else if (type.equals("DUPLICATE")) {
-          LOGGER.warn("Ignoring duplicate sections in annotations.");
+          // LOGGER.warn("Ignoring duplicate sections in annotations.");
           continue;
         } else {
           throw new UnsupportedOperationException("unsupported entity type: " + type);
@@ -315,7 +314,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
           for (Element child : entityElem.getChildren()) {
             children.add(child.getName());
           }
-          error("unprocessed children " + children, id);
+          // error("unprocessed children " + children, id);
         }
       }
     }
@@ -332,7 +331,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
     Element child = getSingleChild(elem, elemName, causeID);
     String text = child.getText();
     if (text.isEmpty()) {
-      error(String.format("an empty '%s' child", elemName), causeID);
+      // error(String.format("an empty '%s' child", elemName), causeID);
       text = null;
     }
     elem.removeChildren(elemName);
@@ -343,7 +342,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
   private static Element getSingleChild(Element elem, String elemName, String causeID) {
     List<Element> children = elem.getChildren(elemName);
     if (children.size() != 1) {
-      error(String.format("not exactly one '%s' child", elemName), causeID);
+      // error(String.format("not exactly one '%s' child", elemName), causeID);
     }
     return children.size() > 0 ? children.get(0) : null;
   }
@@ -394,9 +393,9 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
           Map<String, Annotation> idToAnnotation,
           String causeID) {
     Annotation annotation = idToAnnotation.get(id);
-    if (annotation == null) {
-      error("no annotation with id " + id, causeID);
-    }
+    // if (annotation == null) {
+    //   error("no annotation with id " + id, causeID);
+    // }
     return annotation;
   }
 
@@ -404,9 +403,9 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
           String id,
           Map<String, Annotation> idToAnnotation) {
     Annotation annotation = idToAnnotation.get(id);
-    if (annotation == null) {
-      error("no annotation with id " + id, null);
-    }
+    // if (annotation == null) {
+    //   error("no annotation with id " + id, null);
+    // }
     return annotation;
   }
 
