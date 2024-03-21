@@ -31,6 +31,9 @@ import org.apache.ctakes.typesystem.type.refsem.Event;
 import org.apache.ctakes.typesystem.type.refsem.EventProperties;
 import org.apache.ctakes.typesystem.type.relation.*;
 import org.apache.ctakes.typesystem.type.textsem.*;
+import org.apache.ctakes.typesystem.type.refsem.Time;
+import org.apache.ctakes.typesystem.type.structured.SourceData;
+import org.apache.ctakes.core.util.doc.SourceMetadataUtil;
 import org.apache.log4j.Logger;
 import org.apache.uima.analysis_engine.AnalysisEngine;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
@@ -152,6 +155,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
     int curTimexId = 1;
     int curRelId = 1;
     int docLen = jCas.getDocumentText().length();
+    final SourceData sourceData = SourceMetadataUtil.getOrCreateSourceData( jCas );
     for (Element annotationsElem : dataElem.getChildren("annotations")) {
 
       Map<String, Annotation> idToAnnotation = Maps.newHashMap();
@@ -161,7 +165,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
         String type = removeSingleChildText(entityElem, "type", id);
         Element propertiesElem = removeSingleChild(entityElem, "properties", id);
 
-        if ( type.equals("DOCTIME")) continue;
+        // if ( type.equals("DOCTIME")) continue;
         // UIMA doesn't support disjoint spans, so take the span enclosing
         // everything
         int begin = Integer.MAX_VALUE;
@@ -245,14 +249,34 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
           timeMention.setTimeClass(timeClass);
           timeMention.addToIndexes();
           annotation = timeMention;
+          if ( propertiesElem.getChildren( "normalizedExpression" ).size() > 0 ){
+            String normalizedTimex = removeSingleChildText(propertiesElem, "normalizedExpression", id);
+            if ( normalizedTimex != null ){
+                Time time = timeMention.getTime();
+                if (time == null){
+                    time = new Time( jCas );
+                    time.addToIndexes();
+                }
+                time.setNormalizedForm( normalizedTimex );
+                timeMention.setTime( time );
+            }
+          }
 
         } else if (type.equals("DOCTIME")) {
-          TimeMention timeMention = new TimeMention(jCas, begin, end);
-          timeMention.setId(curTimexId++);
-          timeMention.setTimeClass(type);
-          timeMention.addToIndexes();
-          annotation = timeMention;
-
+            // TimeMention timeMention = new TimeMention(jCas, begin, end);
+            // timeMention.setId(curTimexId++);
+            // timeMention.setTimeClass(type);
+            // timeMention.addToIndexes();
+            // annotation = timeMention;
+            // since previously the code would just
+            // skip to the next iteration if we were on a DocTime
+            if ( propertiesElem.getChildren( "normalizedExpression" ).size() > 0 ){
+                String normalizedTimex = removeSingleChildText(propertiesElem, "normalizedExpression", id);
+                if ( normalizedTimex != null ){
+                    sourceData.setSourceOriginalDate( normalizedTimex );
+                }
+            }
+            annotation = null;
         }
         // else if (type.equals("SECTIONTIME")) {
         //   TimeMention timeMention = new TimeMention(jCas, begin, end);
@@ -278,8 +302,9 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
         }
 
         // match the annotation to it's ID for later use
-        idToAnnotation.put(id, annotation);
-
+        if ( annotation != null ){
+            idToAnnotation.put(id, annotation);
+        }
         // make sure all XML has been consumed
         removeSingleChild(entityElem, "parentsType", id);
         if (!propertiesElem.getChildren().isEmpty() || !entityElem.getChildren().isEmpty()) {
@@ -293,22 +318,8 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
           error("unprocessed children " + children, id);
         }
       }
-
-
-        // make sure all XML has been consumed
-        // removeSingleChild(relationElem, "parentsType", id);
-        // if (!propertiesElem.getChildren().isEmpty() || !relationElem.getChildren().isEmpty()) {
-        //   List<String> children = Lists.newArrayList();
-        //   for (Element child : propertiesElem.getChildren()) {
-        //     children.add(child.getName());
-        //   h
-        //   for (Element child : relationElem.getChildren()) {
-        //     children.add(child.getName());
-        //   }
-        //   error("unprocessed children " + children, id);
-        // }
-      }
     }
+  }
 
 
   private static Element removeSingleChild(Element elem, String elemName, String causeID) {
@@ -377,58 +388,6 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
   }
 
 
-  private static void addRelation(
-          JCas jCas,
-          BinaryTextRelation relation,
-          String sourceID,
-          String targetID,
-          String category,
-          Map<String, Annotation> idToAnnotation) {
-    if (sourceID != null && targetID != null) {
-      //LOGGER.info("Getting src and trg");
-      Annotation source = getArgument(sourceID, idToAnnotation);
-      Annotation target = getArgument(targetID, idToAnnotation);
-      if (source != null && target != null) {
-        //LOGGER.info("src and trg obtained");
-        RelationArgument sourceArg = new RelationArgument(jCas);
-        sourceArg.setArgument(source);
-        sourceArg.addToIndexes();
-        RelationArgument targetArg = new RelationArgument(jCas);
-        targetArg.setArgument(target);
-        targetArg.addToIndexes();
-        relation.setCategory(category);
-        relation.setArg1(sourceArg);
-        relation.setArg2(targetArg);
-        relation.addToIndexes();
-        //LOGGER.info("Got the Arguments");
-      }
-    }
-  }
-  private static void addRelation(
-          JCas jCas,
-          BinaryTextRelation relation,
-          String sourceID,
-          String targetID,
-          String category,
-          Map<String, Annotation> idToAnnotation,
-          String causeID) {
-    if (sourceID != null && targetID != null) {
-      Annotation source = getArgument(sourceID, idToAnnotation, causeID);
-      Annotation target = getArgument(targetID, idToAnnotation, causeID);
-      if (source != null && target != null) {
-        RelationArgument sourceArg = new RelationArgument(jCas);
-        sourceArg.setArgument(source);
-        sourceArg.addToIndexes();
-        RelationArgument targetArg = new RelationArgument(jCas);
-        targetArg.setArgument(target);
-        targetArg.addToIndexes();
-        relation.setCategory(category);
-        relation.setArg1(sourceArg);
-        relation.setArg2(targetArg);
-        relation.addToIndexes();
-      }
-    }
-  }
 
   private static Annotation getArgument(
           String id,
