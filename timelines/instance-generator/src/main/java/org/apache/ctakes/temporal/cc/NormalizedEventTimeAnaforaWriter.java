@@ -14,6 +14,7 @@ import org.apache.ctakes.typesystem.type.textsem.EventMention;
 import org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation;
 import org.apache.ctakes.typesystem.type.textsem.MedicationMention;
 import org.apache.ctakes.typesystem.type.textsem.TimeMention;
+import org.apache.ctakes.typesystem.type.refsem.Time;
 import org.apache.log4j.Logger;
 import org.apache.uima.fit.descriptor.ConfigurationParameter;
 import org.apache.uima.fit.util.JCasUtil;
@@ -365,20 +366,17 @@ final public class NormalizedEventTimeAnaforaWriter extends AbstractJCasFileWrit
       final Element properties = doc.createElement( "properties" );
       String typeName = "";
       String unnormalizedTimex = timeMention.getCoveredText();
-      String normalizedTimex = timeMention
-          .getTime()
-          .getNormalizedForm();
-      if ( normalizedTimex == null ){
-          normalizedTimex = getTimeML( DCT, unnormalizedTimex );
-      }
+
+      // due to https://winterbe.com/posts/2015/03/15/avoid-null-checks-in-java/
+      String normalizedTimex = Optional.of( timeMention )
+          .map( TimeMention::getTime )
+          .map( Time::getNormalizedForm )
+          .orElse( null );
+
       final Element normalizedExpression = doc.createElement( "normalizedExpression" );
       if ( normalizedTimex != null ){
          normalizedExpression.setTextContent( normalizedTimex );
-      } else {
-         System.err.println("Resorting to unnormalized timex: " + unnormalizedTimex );
-         normalizedExpression.setTextContent( unnormalizedTimex );
-      }
-
+      } 
       final String timeClass = timeMention.getTimeClass();
       if ( timeClass != null && ( timeClass.equals( "DOCTIME" ) || timeClass.equals( "SECTIONTIME" ) ) ) {
          typeName = timeClass;

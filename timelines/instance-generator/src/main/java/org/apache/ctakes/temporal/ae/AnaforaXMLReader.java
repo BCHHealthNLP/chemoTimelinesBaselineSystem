@@ -22,6 +22,9 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.ctakes.core.pipeline.PipeBitInfo;
+import org.apache.ctakes.typesystem.type.structured.DocumentPath;
+import org.apache.ctakes.typesystem.type.structured.SourceData;
+import org.apache.uima.fit.util.JCasUtil;
 import org.apache.ctakes.core.util.ListFactory;
 import org.apache.ctakes.typesystem.type.constants.CONST;
 import org.apache.ctakes.typesystem.type.refsem.Event;
@@ -42,8 +45,6 @@ import org.apache.uima.jcas.cas.FSArray;
 import org.apache.uima.jcas.cas.FSList;
 import org.apache.uima.jcas.tcas.Annotation;
 import org.apache.uima.resource.ResourceInitializationException;
-import org.cleartk.util.ViewUriUtil;
-import org.cleartk.util.cr.UriCollectionReader;
 import org.jdom2.Element;
 import org.jdom2.JDOMException;
 import org.jdom2.input.SAXBuilder;
@@ -55,6 +56,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
 import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 @PipeBitInfo(
         name = "Anafora XML Reader (DeepPhe)",
@@ -89,20 +91,32 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
 
   @Override
   public void process(JCas jCas) throws AnalysisEngineProcessException {
-    File jCasFilename = new File(ViewUriUtil.getURI(jCas));
-    String jCasBasename = FilenameUtils.getBaseName(jCasFilename.getAbsolutePath());
+      DocumentPath documentPath = JCasUtil.select( jCas, DocumentPath.class ).iterator().next();
+      File jCasFilename = new File( documentPath.getDocumentPath() );
+      String jCasBasename = FilenameUtils.getBaseName( jCasFilename.getAbsolutePath() );
 
-    // File xmlFile = Arrays.stream(anaforaXMLSuffixes)
-    //         .map(t -> new File(FilenameUtils.concat(this.anaforaDirectory.getAbsolutePath(), jCasBasename + t)))
-    //         .filter(File::exists)
-    //         .findFirst()
-    //         .orElse(null);
+      // List<String> fileNames =  Arrays.stream( this
+      //                                          .anaforaDirectory 
+      //                                          .listFiles() )
+      //     .map( File::getPath )
+      //     .collect( Collectors.toList() );
 
-    File xmlFile = Arrays.stream( this
-                                  .anaforaDirectory
-                                  // .getAbsolutePath()
-                                  .listFiles() )
-        .filter( n -> n.getName().startsWith( jCasBasename ) )
+      // System.out.println( fileNames );
+
+
+      
+      // String target =   jCasBasename.split( "." )[ 0 ];
+      // System.out.println( target );
+      System.out.println( jCasBasename );
+      // File nameJeff = new File( "../input/anafora/" );
+      // System.out.println( nameJeff );
+    File xmlFile = Arrays.stream(
+                                 this
+                                 .anaforaDirectory
+                                 // nameJeff
+                                 // .getAbsolutePath()
+                                 .listFiles() )
+        .filter( n -> FilenameUtils.getBaseName( n.getAbsolutePath() ).startsWith( jCasBasename ) )
         .findFirst()
         .orElse( null );
 
@@ -287,7 +301,7 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
         //   List<String> children = Lists.newArrayList();
         //   for (Element child : propertiesElem.getChildren()) {
         //     children.add(child.getName());
-        //   }
+        //   h
         //   for (Element child : relationElem.getChildren()) {
         //     children.add(child.getName());
         //   }
@@ -439,15 +453,5 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
 
   private static void error(String found, String id) {
     LOGGER.error(String.format("found %s in annotation with ID %s", found, id));
-  }
-
-  public static void main(String[] args) throws Exception {
-    List<File> files = new ArrayList<>();
-    for (String path : args) {
-      files.add(new File(path));
-    }
-    CollectionReader reader = UriCollectionReader.getCollectionReaderFromFiles(files);
-    AnalysisEngine engine = AnalysisEngineFactory.createEngine(AnaforaXMLReader.class);
-    SimplePipeline.runPipeline(reader, engine);
   }
 }
