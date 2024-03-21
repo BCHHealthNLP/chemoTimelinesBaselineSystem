@@ -2,8 +2,7 @@ import os
 import sys
 from collections import defaultdict
 from itertools import chain
-from typing import (Dict, Generator, Iterable, List, Optional, Set, Tuple,
-                    Union, cast)
+from typing import Dict, Generator, Iterable, List, Optional, Set, Tuple, Union, cast
 
 import pandas as pd
 import torch
@@ -122,11 +121,12 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
     def process(self, cas: Cas):
         timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
-        proc_mentions = TimelineAnnotator._get_event_mentions(cas, self.anafora_dir)
+        event_mention_type = cas.typesystem.get_type(ctakes_types.EventMention)
 
         relevant_timexes = TimelineAnnotator._timexes_with_normalization(
             cas.select(timex_type)
         )
+        proc_mentions = cas.select(event_mention_type)
         if len(proc_mentions) > 0 and len(relevant_timexes) > 0:
             self._write_raw_timelines(cas, proc_mentions, relevant_timexes)
         else:
@@ -150,6 +150,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         pt_df.to_csv(output_path, index=False, sep="\t")
         print("Finished writing")
         sys.exit()
+
     def _write_raw_timelines(
         self,
         cas: Cas,
@@ -310,113 +311,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 document_creation_time, patient_id, note_name, self.use_dtr
             )
         )
-
-    @staticmethod
-    def _get_event_mentions(cas: Cas, anafora_dir: str) -> List[FeatureStructure]:
-        event_type = cas.typesystem.get_type(ctakes_types.Event)
-        event_mention_type = cas.typesystem.get_type(ctakes_types.EventMention)
-        event_properties_type = cas.typesystem.get_type(ctakes_types.EventProperties)
-        _, note_name = TimelineAnnotator._pt_and_note(cas)
-
-        # this is extension agnostic but inefficient
-        def relevant_path(doc_path: str) -> bool:
-            base_name = os.path.basename(doc_path).split(".")[0]
-            return base_name.lower() == note_name.lower()
-
-        def full_path(f: str) -> str:
-            return os.path.join(anafora_dir, f)
-
-        relevants = filter(relevant_path, map(full_path, os.listdir(anafora_dir)))
-        relevant_file = next(relevants, None)
-        # print(f"NOTE NAME: {note_name} RELEVANT FILE {relevant_file} DIR {anafora_dir}")
-        if relevant_file is None:
-            return []
-        additional = next(relevants, None)
-        if additional is not None:
-            print(
-                f"Error: multiple Anafora files found for patient note {note_name}, at least two {relevant_file} and {additional}"
-            )
-            return []
-
-        def insert_event(proto_event: Tuple[int, int, str, str]) -> FeatureStructure:
-            begin, end, conmod, dtr = proto_event
-            event_mention = event_mention_type(begin=begin, end=end)
-            cas.add(event_mention)
-            event_properties = event_properties_type()
-            event = event_type()
-            setattr(event, "properties", event_properties)
-            setattr(event_mention, "event", event)
-            # since there's no built in way
-            # currently to set a nested attribute
-            event_mention.event.properties.contextualModality = conmod.upper()
-            event_mention.event.properties.docTimeRel = dtr.upper()
-            return event_mention
-
-        return list(
-            map(insert_event, TimelineAnnotator._anafora_entities(relevant_file))
-        )
-
-    @staticmethod
-    def get_ent_with_doctimerel(ent_list):
-        for ent in ent_list:
-            if ent["type"] != "EVENT":
-                return ent
-            else:
-                if ent["properties"]["DocTimeRel"]:
-                    return ent
-        return ent_list[0]
-
-    @staticmethod
-    # entity_returns here will be:
-    # begin, end, conmod, dtr
-    def _anafora_entities(
-        xml_path: str,
-    ) -> Generator[Tuple[int, int, str, str], None, None]:
-        with open(xml_path) as fr:
-            xml_data_dict = xmltodict.parse(fr.read())
-
-        if xml_data_dict["data"]["annotations"] is None:
-            return None
-
-        if not (
-            xml_data_dict["data"]["annotations"]
-            and xml_data_dict["data"]["annotations"]["entity"]
-        ):
-            return None
-        if isinstance(xml_data_dict["data"]["annotations"]["entity"], list):
-            entities = [
-                ent
-                for ent in xml_data_dict["data"]["annotations"]["entity"]
-                if ent["type"] != "Markable"
-            ]
-        else:
-            entities_with_markable = [xml_data_dict["data"]["annotations"]["entity"]]
-            entities = [
-                ent for ent in entities_with_markable if ent["type"] != "Markable"
-            ]
-        entity_with_duplicate = defaultdict(list)
-        entity_no_duplicate = []
-        for ent in entities:
-            entity_with_duplicate[ent["span"]].append(ent)
-        for ents in entity_with_duplicate.values():
-            if len(ents) == 1:
-                entity_no_duplicate.append(ents[0])
-            else:
-                valid_ent = TimelineAnnotator.get_ent_with_doctimerel(ents)
-                entity_no_duplicate.append(valid_ent)
-
-        def is_event(entity_dict: Dict) -> bool:
-            return entity_dict["type"].lower() == "event"
-
-        for ent in filter(is_event, entity_no_duplicate):
-            ent_start, ent_end = tuple(int(s) for s in ent["span"].split(","))
-            assert ent_start is not None
-            assert ent_end is not None
-            assert ent_start <= ent_end
-            conmod = ent["properties"]["ContextualModality"]
-            dtr = ent["properties"]["DocTimeRel"]
-
-            yield (ent_start, ent_end, conmod, dtr)
 
     @staticmethod
     def _empty_discovery(
