@@ -98,28 +98,16 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
       File jCasFilename = new File( documentPath.getDocumentPath() );
       String jCasBasename = FilenameUtils.getBaseName( jCasFilename.getAbsolutePath() );
 
-      // List<String> fileNames =  Arrays.stream( this
-      //                                          .anaforaDirectory 
-      //                                          .listFiles() )
-      //     .map( File::getPath )
-      //     .collect( Collectors.toList() );
-
-      // System.out.println( fileNames );
-
-
-      
-      // String target =   jCasBasename.split( "." )[ 0 ];
-      // System.out.println( target );
       System.out.println( jCasBasename );
-      // File nameJeff = new File( "../input/anafora/" );
-      // System.out.println( nameJeff );
     File xmlFile = Arrays.stream(
                                  this
                                  .anaforaDirectory
-                                 // nameJeff
-                                 // .getAbsolutePath()
                                  .listFiles() )
-        .filter( n -> FilenameUtils.getBaseName( n.getAbsolutePath() ).startsWith( jCasBasename ) )
+        .filter(
+                n -> FilenameUtils
+                .getBaseName( n.getAbsolutePath() )
+                .startsWith( jCasBasename )
+                )
         .findFirst()
         .orElse( null );
 
@@ -262,13 +250,11 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
           }
 
         } else if (type.equals("DOCTIME")) {
-            // TimeMention timeMention = new TimeMention(jCas, begin, end);
-            // timeMention.setId(curTimexId++);
-            // timeMention.setTimeClass(type);
-            // timeMention.addToIndexes();
-            // annotation = timeMention;
-            // since previously the code would just
-            // skip to the next iteration if we were on a DocTime
+            TimeMention timeMention = new TimeMention(jCas, begin, end);
+            timeMention.setId(curTimexId++);
+            timeMention.setTimeClass(type);
+            timeMention.addToIndexes();
+            annotation = timeMention;
             if ( propertiesElem.getChildren( "normalizedExpression" ).size() > 0 ){
                 String normalizedTimex = removeSingleChildText(propertiesElem, "normalizedExpression", id);
                 if ( normalizedTimex != null ){
