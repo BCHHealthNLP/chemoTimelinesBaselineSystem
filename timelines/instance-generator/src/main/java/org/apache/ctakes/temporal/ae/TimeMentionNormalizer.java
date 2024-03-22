@@ -146,10 +146,10 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
     private String getTimeML( TimeSpan DCT, TimeMention timeMention, String fileName ){
         String rawTimeMention = timeMention.getCoveredText();
         if ( timeMention.getClass().equals( "DOCTIME" ) ){
-            assert rawTimeMention.length == 8;
+            assert rawTimeMention.length() == 8;
             int year = Integer.parseInt( rawTimeMention.substring( 0, 4 ) );
             int month = Integer.parseInt( rawTimeMention.substring( 4, 6 ) );
-            int day = Integer.parseInt( rawTimeMention.substring( 6, 8 ) );
+            int date = Integer.parseInt( rawTimeMention.substring( 6, 8 ) );
             try{
                 TimeSpan parsedDate = TimeSpan.of( year, month, date );
                 String dateMLValue = parsedDate.timeMLValue();
