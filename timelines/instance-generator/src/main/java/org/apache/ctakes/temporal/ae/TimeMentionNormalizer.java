@@ -99,20 +99,6 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
         final String docTime = sourceData.getSourceOriginalDate();
         DocumentPath documentPath = JCasUtil.select( jCas, DocumentPath.class ).iterator().next();
         final String fileName = FilenameUtils.getBaseName( documentPath.getDocumentPath() );
-        // if (this.tuis != null && !this.tuis.trim().isEmpty()){
-        //     boolean hasRelevantTUIs = JCasUtil
-        //         .select( jCas, EventMention.class )
-        //         .stream()
-        //         .map( OntologyConceptUtil::getUmlsConcepts )
-        //         .flatMap( Collection::stream )
-        //         .map( UmlsConcept::getTui )
-        //         .anyMatch( tui -> this.tuiSet.contains( tui ) );
-
-        //     if ( !hasRelevantTUIs ){
-        //         LOGGER.info(fileName + " : no events with the provided TUIs " + this.tuis + " skipping to save time");
-        //         return;
-        //     }
-        // }
 
         TimeSpan _DCT = null;
         if ( docTime == null || docTime.isEmpty() ){
@@ -159,6 +145,16 @@ public class TimeMentionNormalizer extends org.apache.uima.fit.component.JCasAnn
 
     private String getTimeML( TimeSpan DCT, TimeMention timeMention, String fileName ){
         String rawTimeMention = timeMention.getCoveredText();
+        if ( timeMention.getClass().equals( "DOCTIME" ) ){
+            int year = Integer.parseInt( rawTimeMention.substring( 0, 4 ) );
+            int month = Integer.parseInt( rawTimeMention.substring( 4, 6 ) );
+            int day = Integer.parseInt( rawTimeMention.substring( 6, 8 ) );
+            try{
+                parsedDate = TimeSpan.of( year, month, date );
+                String dateMLValue = parsedDate.timeMLValue();
+                return dateMLValue;
+            } catch ( Exception ignored ){}
+        }
         String[] rawDateElements = rawTimeMention.split("/");
          List<Integer> dateElements = new ArrayList<>();
         for ( String dateElement : rawDateElements ){
