@@ -158,30 +158,28 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
         // everything
         int begin = Integer.MAX_VALUE;
         int end = Integer.MIN_VALUE;
-        if ( !type.equals( "DOCTIME" ) ){
-            try {
-                //for (String spanString : spanElem.getText().split(";")) {
-                for (String spanString : spanElem.getText().split(";")) {
-                    String[] beginEndStrings = spanString.split(",");
-                    // if (beginEndStrings.length != 2) {
-                    //     error("span not of the format 'number,number'", id);
-                    // }
-                    int spanBegin = Integer.parseInt(beginEndStrings[0]);
-                    int spanEnd = Integer.parseInt(beginEndStrings[1]);
-                    if (spanBegin < begin && spanBegin >= 0) {
-                        begin = spanBegin;
-                    }
-                    if (spanEnd > end && spanEnd <= docLen) {
-                        end = spanEnd;
-                    }
+        try {
+            //for (String spanString : spanElem.getText().split(";")) {
+            for (String spanString : spanElem.getText().split(";")) {
+                String[] beginEndStrings = spanString.split(",");
+                // if (beginEndStrings.length != 2) {
+                //     error("span not of the format 'number,number'", id);
+                // }
+                int spanBegin = Integer.parseInt(beginEndStrings[0]);
+                int spanEnd = Integer.parseInt(beginEndStrings[1]);
+                if (spanBegin < begin && spanBegin >= 0) {
+                    begin = spanBegin;
                 }
-                if(begin < 0 || end > docLen){
-                    // error("Illegal begin or end boundary", id);
-                    continue;
+                if (spanEnd > end && spanEnd <= docLen) {
+                    end = spanEnd;
                 }
-            } catch (Exception e){
-                throw new RuntimeException(e);
             }
+            if(begin < 0 || end > docLen){
+                // error("Illegal begin or end boundary", id);
+                continue;
+            }
+        } catch (Exception e){
+            throw new RuntimeException(e);
         }
 
 
