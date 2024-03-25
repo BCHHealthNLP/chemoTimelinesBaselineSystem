@@ -123,15 +123,16 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             cas.select(timex_type)
         )
         proc_mentions = cas.select(event_mention_type)
+        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
         if len(proc_mentions) > 0 and len(relevant_timexes) > 0:
+            print(f"Processing {note_name}")
             self._write_raw_timelines(cas, proc_mentions, relevant_timexes)
-        else:
-            # empty discovery writing logic so no patients are skipped for the eval script
-            self._add_empty_discovery(cas)
-            patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
-            print(
-                f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or no normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
-            )
+            return
+        # empty discovery writing logic so no patients are skipped for the eval script
+        self._add_empty_discovery(cas)
+        print(
+            f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) or no normalized time mentions found in patient {patient_id} note {note_name}  - skipping"
+        )
 
     def collection_process_complete(self):
         output_columns = DTR_OUTPUT_COLUMNS if self.use_dtr else NO_DTR_OUTPUT_COLUMNS
@@ -155,9 +156,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     ):
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
         if not self.use_conmod:
-            print(
-                f"Modality filtering turned off, proceeding for patient {patient_id} note {note_name}"
-            )
+            # print(
+            #     f"Modality filtering turned off, proceeding for patient {patient_id} note {note_name}"
+            # )
             self._write_actual_proc_mentions(cas, proc_mentions, relevant_timexes)
             return
         conmod_instances = (
@@ -211,6 +212,17 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 chemo, relevant_timexes, begin2token, end2token, token_map
             )
 
+        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
+        timexes_in_some_window = list(
+            chain.from_iterable(map(local_window_mentions, positive_chemo_mentions))
+        )
+        if len(relevant_timexes) == 0 or len(timexes_in_some_window) == 0:
+            print(
+                f"No timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}, exiting"
+            )
+            self._add_empty_discovery(cas)
+            return
+
         def dtr_result(chemo: FeatureStructure) -> Tuple[str, str]:
             inst = TimelineAnnotator._get_dtr_instance(
                 chemo, base_tokens, begin2token, end2token
@@ -240,17 +252,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 for window_mention in window_mentions
             }
 
-        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
-
-        timexes_in_some_window = list(
-            chain.from_iterable(map(local_window_mentions, positive_chemo_mentions))
-        )
-        if len(relevant_timexes) == 0 or len(timexes_in_some_window) == 0:
-            print(
-                f"WARNING: No timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
-            )
-            self._add_empty_discovery(cas)
-            return
         # Needed for Jiarui's deduplication algorithm
         annotation_ids = {
             annotation: f"{index}@e@{note_name}@system"
@@ -296,6 +297,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                         note_name,
                         tlink_inst,
                     ]
+                print(f"logged instance: {instance}")
                 self.raw_events.append(instance)
 
     def _add_empty_discovery(self, cas: Cas):
