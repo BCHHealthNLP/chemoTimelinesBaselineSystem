@@ -92,39 +92,39 @@ public class AnaforaXMLReader extends JCasAnnotator_ImplBase {
     );
   }
 
-  @Override
-  public void process(JCas jCas) throws AnalysisEngineProcessException {
-      DocumentPath documentPath = JCasUtil.select( jCas, DocumentPath.class ).iterator().next();
-      File jCasFilename = new File( documentPath.getDocumentPath() );
-      String jCasBasename = FilenameUtils.getBaseName( jCasFilename.getAbsolutePath() );
-
-      System.out.println( jCasBasename );
-    File xmlFile = Arrays.stream(
-                                 this
-                                 .anaforaDirectory
-                                 .listFiles() )
-        .filter(
-                n -> FilenameUtils
-                .getBaseName( n.getAbsolutePath() )
-                .startsWith( jCasBasename )
-                )
-        .findFirst()
-        .orElse( null );
-
-    if ( xmlFile == null ){
-        System.err.println(xmlFile.getAbsolutePath());
-        System.err.println(jCasFilename.getAbsolutePath());
+    @Override
+    public void process(JCas jCas) throws AnalysisEngineProcessException {
+        DocumentPath documentPath = JCasUtil.select( jCas, DocumentPath.class ).iterator().next();
+        File jCasFilename = new File( documentPath.getDocumentPath() );
+        String jCasBasename = FilenameUtils.getBaseName( jCasFilename.getAbsolutePath() );
+        
+        System.out.println( jCasBasename );
+        File xmlFile = Arrays.stream(
+                                     this
+                                     .anaforaDirectory
+                                     .listFiles() )
+            .filter(
+                    n -> FilenameUtils
+                    .getBaseName( n.getAbsolutePath() )
+                    .startsWith( jCasBasename )
+                    )
+            .findFirst()
+            .orElse( null );
+        
+        if ( xmlFile == null ){
+            System.err.println( jCasFilename.getAbsolutePath() );
+            System.err.println( jCasBasename );
+        }
+        
+        try {
+            processXmlFile( jCas, xmlFile );
+        } catch (Exception e) {
+            if( xmlFile != null ) System.err.println(xmlFile.getAbsolutePath() + " " + xmlFile.exists());
+            System.err.println(jCasFilename.getAbsolutePath());
+            throw new RuntimeException(e);
+        }
     }
-
-    try {
-        processXmlFile( jCas, xmlFile );
-    } catch (Exception e) {
-        if( xmlFile != null ) System.err.println(xmlFile.getAbsolutePath() + " " + xmlFile.exists());
-        System.err.println(jCasFilename.getAbsolutePath());
-        throw new RuntimeException(e);
-    }
-  }
-
+    
 
   private static void processXmlFile( JCas jCas, File xmlFile ) throws AnalysisEngineProcessException, FileNotFoundException, SAXException {
     // load the XML

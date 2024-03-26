@@ -444,12 +444,35 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         begin2token: Dict[int, int],
         end2token: Dict[int, int],
     ) -> str:
-        event_begin = begin2token[event.begin]
-        event_end = end2token[event.end] + 1
+        event_char_begin = (
+            event.begin
+            if event.begin in begin2token.keys()
+            else min(begin2token.keys(), key=lambda tok_idx: abs(tok_idx - event.begin))
+        )
+        event_char_end = (
+            event.end
+            if event.end in end2token.keys()
+            else min(end2token.keys(), key=lambda tok_idx: abs(tok_idx - event.end))
+        )
+
+        event_begin = begin2token[event_char_begin]
+        event_end = end2token[event_char_end] + 1
         event_tags = ("<e>", "</e>")
         event_packet = (event_begin, event_end, event_tags)
-        timex_begin = begin2token[timex.begin]
-        timex_end = end2token[timex.end] + 1
+
+        timex_char_begin = (
+            timex.begin
+            if timex.begin in begin2token.keys()
+            else min(begin2token.keys(), key=lambda tok_idx: abs(tok_idx - timex.begin))
+        )
+        timex_char_end = (
+            timex.end
+            if timex.end in end2token.keys()
+            else min(end2token.keys(), key=lambda tok_idx: abs(tok_idx - timex.end))
+        )
+
+        timex_begin = begin2token[timex_char_begin]
+        timex_end = end2token[timex_char_end] + 1
         timex_tags = ("<t>", "</t>")
         timex_packet = (timex_begin, timex_end, timex_tags)
 
