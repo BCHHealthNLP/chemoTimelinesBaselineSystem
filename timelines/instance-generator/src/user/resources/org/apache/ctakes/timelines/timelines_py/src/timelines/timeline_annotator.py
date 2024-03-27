@@ -124,8 +124,8 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         )
         proc_mentions = cas.select(event_mention_type)
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
+        print(f"Processing {note_name} chemos {proc_mentions} timexes {relevant_timexes}")
         if len(proc_mentions) > 0 and len(relevant_timexes) > 0:
-            print(f"Processing {note_name}")
             self._write_raw_timelines(cas, proc_mentions, relevant_timexes)
             return
         # empty discovery writing logic so no patients are skipped for the eval script
