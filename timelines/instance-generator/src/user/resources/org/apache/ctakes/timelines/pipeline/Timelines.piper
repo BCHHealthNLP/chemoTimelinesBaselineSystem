@@ -11,21 +11,13 @@ set TimelinesSecondStep=timelines.timelines_python_pipeline
 
 add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory --anafora_dir $AnaforaDir"
 
-set minimumSpan=2
-set exclusionTags=“”
-
 // Just the components we need from DefaultFastPipeline
 
-// Write nice big banners when ctakes starts and finishes.
 set WriteBanner=yes
 
-// Load a simple token processing pipeline from another pipeline file
 load DefaultTokenizerPipeline
 
-// Add non-core annotators
 add ContextDependentTokenizerAnnotator
-// Dictionary module requires tokens so needs to be loaded after the tokenization stack
-// load DictionarySubPipe
 
 add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
 add DCTAnnotator
