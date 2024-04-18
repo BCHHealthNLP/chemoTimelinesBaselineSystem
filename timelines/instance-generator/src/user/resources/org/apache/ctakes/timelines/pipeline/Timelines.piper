@@ -19,13 +19,17 @@ set exclusionTags=“”
 // Write nice big banners when ctakes starts and finishes.
 set WriteBanner=yes
 
-// Load a simple token processing pipeline from another pipeline file
-load DefaultTokenizerPipeline
+// One giant section
+add SimpleSegmentAnnotator
 
-// Add non-core annotators
-add ContextDependentTokenizerAnnotator
-// Dictionary module requires tokens so needs to be loaded after the tokenization stack
-load DictionarySubPipe
+//  Detect sentences using a machine learning model.
+addLogged SentenceDetectorAnnotatorBIO classifierJarPath=/org/apache/ctakes/core/models/sentdetect/model.jar
+
+// Joins sentences improperly split at person titles.
+add MrsDrSentenceJoiner
+
+//  Tokenize by penn treebank rules.
+add TokenizerAnnotatorPTB
 
 add BackwardsTimeAnnotator classifierJarPath=/org/apache/ctakes/temporal/models/timeannotator/model.jar
 add DCTAnnotator
