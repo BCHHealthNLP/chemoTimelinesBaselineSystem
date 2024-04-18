@@ -1,11 +1,12 @@
 import os
 from collections import deque
-from typing import Dict, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
 import re
 from cassis.cas import Cas
+from datasets import Dataset
 from cassis.typesystem import FeatureStructure
 from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
@@ -80,15 +81,17 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         event_mention_type = cas.typesystem.get_type(ctakes_types.EventMention)
         event_properties_type = cas.typesystem.get_type(ctakes_types.EventProperties)
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
+        # sorting here so we have a reliable way of accessing the
+        # chemo - timex pairs later
         relevant_timexes = TimelineAnnotator._timexes_with_normalization(
-            cas.select(timex_type)
+            sorted(cas.select(timex_type), key=lambda t: t.begin)
         )
         if len(relevant_timexes) == 0:
             print(
                 f"No normalized time expressions for {patient_id} {note_name} - skipping"
             )
             return
-        chemo_mentions = TimelineAnnotator._get_chemo_mentions(cas)
+        chemo_mentions = self._get_chemo_mentions(cas)
         if len(chemo_mentions) == 0:
             print(
                 f"No chemotherapy mentions detected for {patient_id} {note_name} - skipping"
@@ -118,12 +121,46 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             )
 
         chemo_to_relevant_timexes = {
-            chemo: local_window_mentions(chemo) for chemo in cas.select(event_type)
+            chemo: local_window_mentions(chemo)
+            for chemo in sorted(cas.select(event_type), key=lambda t: t.begin)
         }
 
-        if sum(map(len, chemo_to_relevant_timexes.values())) == 0:
-            print(f"No compatible normalized timexes found for any of the chemos in {patient_id} {note_name} - skipping")
+        if not any(chemo_to_relevant_timexes.values()):
+            print(
+                f"No compatible normalized timexes found for any of the chemos in {patient_id} {note_name} - skipping"
+            )
             return
+        ordered_chemo_timex_pairs = [
+            (chemo, timex)
+            for chemo, timexes in chemo_to_relevant_timexes.items()
+            for timex in timexes
+        ]
+        tlink_classification_instances = (
+            TimelineAnnotator._get_tlink_instance(
+                chemo, timex, base_tokens, begin2token, end2token
+            )
+            for chemo, timex in ordered_chemo_timex_pairs
+        )
+
+        tlink_classifications = self._get_tlink_classifications(
+            tlink_classification_instances
+        )
+        cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
+        document_creation_time = cas_source_data.sourceOriginalDate
+        for pair, tlink in zip(ordered_chemo_timex_pairs, tlink_classifications):
+            chemo, timex = pair
+            if timex.begin < chemo.begin:
+                tlink = LABEL_TO_INVERTED_LABEL[tlink]
+            self.raw_events.append(
+                (
+                    patient_id,
+                    note_name,
+                    document_creation_time,
+                    TimelineAnnotator._normalize_mention(chemo),
+                    TimelineAnnotator._normalize_mention(timex),
+                    tlink,
+                )
+            )
 
     def collection_process_complete(self):
         output_columns = NO_DTR_OUTPUT_COLUMNS
@@ -269,6 +306,19 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             begin_map[begin] = token_index
             end_map[end] = token_index
         return begin_map, end_map
+
+    def _get_chemo_mentions(self, cas: Cas) -> List[Tuple[int, int]]:
+        # TODO - Hf Dataset logic and inference etc etc
+        return []
+
+    def _get_tlink_classifications(
+        self, tlink_classification_instances: Iterable[str]
+    ) -> List[str]:
+        raw_dataset = Dataset.from_dict({"text": tlink_classification_instances})
+        processed_dataset = raw_dataset.map(
+            preprocess, batched=True, desc="Tokenizing dataset"
+        )
+        return []
 
     @staticmethod
     def _timexes_with_normalization(
