@@ -4,6 +4,7 @@ from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
+import re
 from cassis.cas import Cas
 from cassis.typesystem import FeatureStructure
 from ctakes_pbj.component import cas_annotator
@@ -74,7 +75,55 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         arg_parser.add_arg("--med_model_path", action="store_true")
 
     def process(self, cas: Cas):
-        pass
+        timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
+        event_type = cas.typesystem.get_type(ctakes_types.Event)
+        event_mention_type = cas.typesystem.get_type(ctakes_types.EventMention)
+        event_properties_type = cas.typesystem.get_type(ctakes_types.EventProperties)
+        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
+        relevant_timexes = TimelineAnnotator._timexes_with_normalization(
+            cas.select(timex_type)
+        )
+        if len(relevant_timexes) == 0:
+            print(
+                f"No normalized time expressions for {patient_id} {note_name} - skipping"
+            )
+            return
+        chemo_mentions = TimelineAnnotator._get_chemo_mentions(cas)
+        if len(chemo_mentions) == 0:
+            print(
+                f"No chemotherapy mentions detected for {patient_id} {note_name} - skipping"
+            )
+            return
+
+        def insert_chemo_mention(chemo_mention: Tuple[int, int]) -> None:
+            begin, end = chemo_mention
+            event_mention = event_mention_type(begin=begin, end=end)
+            cas.add(event_mention)
+            event_properties = event_properties_type()
+            event = event_type()
+            setattr(event, "properties", event_properties)
+            setattr(event_mention, "event", event)
+
+        for chemo_mention in chemo_mentions:
+            insert_chemo_mention(chemo_mention)
+
+        base_tokens, token_map = TimelineAnnotator._tokens_and_map(cas, mode="dtr")
+        begin2token, end2token = TimelineAnnotator._invert_map(token_map)
+
+        def local_window_mentions(
+            chemo: FeatureStructure,
+        ) -> List[FeatureStructure]:
+            return TimelineAnnotator._get_tlink_window_mentions(
+                chemo, relevant_timexes, begin2token, end2token, token_map
+            )
+
+        chemo_to_relevant_timexes = {
+            chemo: local_window_mentions(chemo) for chemo in cas.select(event_type)
+        }
+
+        if sum(map(len, chemo_to_relevant_timexes.values())) == 0:
+            print(f"No compatible normalized timexes found for any of the chemos in {patient_id} {note_name} - skipping")
+            return
 
     def collection_process_complete(self):
         output_columns = NO_DTR_OUTPUT_COLUMNS
@@ -88,6 +137,38 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         )
         pt_df.to_csv(output_path, index=False, sep="\t")
         print("Finished writing")
+
+    @staticmethod
+    def _ctakes_tokenize(
+        cas: Cas, sentence: FeatureStructure
+    ) -> List[FeatureStructure]:
+        return sorted(
+            cas.select_covered(ctakes_types.BaseToken, sentence), key=lambda t: t.begin
+        )
+
+    @staticmethod
+    def _ctakes_clean(
+        cas: Cas, sentence: FeatureStructure
+    ) -> Tuple[str, List[Tuple[int, int]]]:
+        base_tokens = deque()
+        token_map = deque()
+        newline_tokens = cas.select_covered(ctakes_types.NewlineToken, sentence)
+        newline_token_indices = {(item.begin, item.end) for item in newline_tokens}
+
+        for base_token in TimelineAnnotator._ctakes_tokenize(cas, sentence):
+            if (
+                (base_token.begin, base_token.end)
+                not in newline_token_indices
+                # and base_token.get_covered_text()
+                # and not base_token.get_covered_text().isspace()
+            ):
+                base_tokens.append(base_token.get_covered_text())
+                token_map.append((base_token.begin, base_token.end))
+            else:
+                # since these indices are tracked as well in the RT code
+                base_tokens.append("<cr>")
+                token_map.append((base_token.begin, base_token.end))
+        return " ".join(base_tokens), list(token_map)
 
     @staticmethod
     def _normalize_mention(mention: Union[FeatureStructure, None]) -> str:
@@ -133,6 +214,31 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             token_map.append((begin, end))
 
         return base_tokens, token_map
+
+    @staticmethod
+    def process_ann(tagged_sentence: str) -> List[Tuple[int, int]]:
+        """
+
+        Args:
+        annotation:  NER model output tags
+
+        Returns:
+        Annotation relative indices of discovered entity mentions
+        """
+        span_begin, span_end = 0, 0
+        indices = []
+        # Group B's individually as well as B's followed by
+        # any nummber of I's, e.g.
+        # OOOOOOBBBBBBBIIIIBIBIBI
+        # -> OOOOOO B B B B B B BIIII BI BI BI
+        for span in filter(None, re.split(r"(BI*)", tagged_sentence)):
+            span_end = len(span) + span_begin - 1
+            if span[0] == "B":
+                # Get indices in list/string of each span
+                # which describes a mention
+                indices.append((span_begin, span_end))
+            span_begin = span_end + 1
+        return indices
 
     @staticmethod
     def _invert_map(
@@ -239,7 +345,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         begin2token: Dict[int, int],
         end2token: Dict[int, int],
         token2char: List[Tuple[int, int]],
-    ) -> Iterator[FeatureStructure]:
+    ) -> List[FeatureStructure]:
         event_begin_token_index = begin2token[event.begin]
         event_end_token_index = end2token[event.end]
 
@@ -256,7 +362,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             end_inside = char_window_begin <= mention.end <= char_window_end
             return begin_inside and end_inside
 
-        return (mention for mention in relevant_mentions if in_window(mention))
+        return [mention for mention in relevant_mentions if in_window(mention)]
 
     @staticmethod
     def _pt_and_note(cas: Cas):
