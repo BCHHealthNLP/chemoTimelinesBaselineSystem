@@ -1,38 +1,17 @@
 import os
-import torch
-import sys
-import pandas as pd
+from collections import deque
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
-from itertools import chain
-from transformers import pipeline
+import pandas as pd
+import torch
+from cassis.cas import Cas
+from cassis.typesystem import FeatureStructure
 from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
-from typing import List, Tuple, Dict, Optional, Generator, Union, Set
-from cassis.typesystem import (
-    FeatureStructure,
-)
 
-from cassis.cas import Cas
-
-
-DTR_WINDOW_RADIUS = 10
 MAX_TLINK_DISTANCE = 60
 TLINK_PAD_LENGTH = 2
 MODEL_MAX_LEN = 512
-CHEMO_TUI = "T061"
-DTR_OUTPUT_COLUMNS = [
-    "DCT",
-    "patient_id",
-    "chemo_text",
-    "chemo_annotation_id",
-    "dtr",
-    "normed_timex",
-    "timex_annotation_id",
-    "tlink",
-    "note_name",
-    "dtr_inst",
-    "tlink_inst",
-]
 
 NO_DTR_OUTPUT_COLUMNS = [
     "DCT",
@@ -60,26 +39,17 @@ LABEL_TO_INVERTED_LABEL = {
     "none": "none",
 }
 
-TLINK_HF_HUB = "HealthNLP/pubmedbert_tlink"
-
-DTR_HF_HUB = "HealthNLP/pubmedbert_dtr"
-
-CONMOD_HF_HUB = "HealthNLP/pubmedbert_conmod"
-
 
 class TimelineAnnotator(cas_annotator.CasAnnotator):
     def __init__(self):
-        self.use_dtr = False
-        self.use_conmod = False
         self.output_dir = "."
-        self.dtr_classifier = lambda _: []
         self.tlink_classifier = lambda _: []
-        self.conmod_classifier = lambda _: []
-        self.raw_events = []
+        self.med_tagger = lambda _: []
+        self.raw_events = deque()
 
     def init_params(self, arg_parser):
-        self.use_dtr = arg_parser.use_dtr
-        self.use_conmod = arg_parser.use_conmod
+        self.tlink_model_path = arg_parser.tlink_model_path
+        self.med_model_path = arg_parser.med_model_path
         self.output_dir = arg_parser.output_dir
 
     def initialize(self):
@@ -90,56 +60,26 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             main_device = -1
             print("GPU with CUDA is not available, defaulting to CPU")
 
-        self.tlink_classifier = TimelineAnnotator._get_pipeline(
-            TLINK_HF_HUB,
-            main_device,
+        self.tlink_classifier = TimelineAnnotator._load_classifier(
+            self.tlink_model_path, main_device
         )
-
         print("TLINK classifier loaded")
-        if self.use_dtr:
-            self.dtr_classifier = TimelineAnnotator._get_pipeline(
-                DTR_HF_HUB,
-                main_device,
-            )
-
-            print("DTR classifier loaded")
-
-        if self.use_conmod:
-            self.conmod_classifier = TimelineAnnotator._get_pipeline(
-                CONMOD_HF_HUB,
-                main_device,
-            )
-
-            print("Conmod classifier loaded")
+        self.med_tagger = TimelineAnnotator._load_tagger(
+            self.med_model_path, main_device
+        )
+        print("Medication tagger loaded")
 
     def declare_params(self, arg_parser):
-        arg_parser.add_arg("--use_dtr", action="store_true")
-        arg_parser.add_arg("--use_conmod", action="store_true")
+        arg_parser.add_arg("--tlink_model_path", action="store_true")
+        arg_parser.add_arg("--med_model_path", action="store_true")
 
     def process(self, cas: Cas):
-        proc_mentions = [
-            event
-            for event in cas.select(cas.typesystem.get_type(ctakes_types.EventMention))
-            if CHEMO_TUI
-            in TimelineAnnotator._get_tuis(
-                event
-            )  # as of 1/10/24, using T061 which is ProcedureMention
-        ]
-
-        if len(proc_mentions) > 0:
-            self._write_raw_timelines(cas, proc_mentions)
-        else:
-            # empty discovery writing logic so no patients are skipped for the eval script
-            self._add_empty_discovery(cas)
-            patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
-            print(
-                f"No chemotherapy mentions ( using TUI: {CHEMO_TUI} ) found in patient {patient_id} note {note_name}  - skipping"
-            )
+        pass
 
     def collection_process_complete(self):
-        output_columns = DTR_OUTPUT_COLUMNS if self.use_dtr else NO_DTR_OUTPUT_COLUMNS
+        output_columns = NO_DTR_OUTPUT_COLUMNS
         output_tsv_name = "unsummarized_output.tsv"
-        output_path = "".join([self.output_dir, "/", output_tsv_name])
+        output_path = "".join((self.output_dir, "/", output_tsv_name))
         print("Finished processing notes")
         print(f"Writing results for all input in {output_path}")
         pt_df = pd.DataFrame.from_records(
@@ -148,190 +88,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         )
         pt_df.to_csv(output_path, index=False, sep="\t")
         print("Finished writing")
-        sys.exit()
-
-    def _write_raw_timelines(self, cas: Cas, proc_mentions: List[FeatureStructure]):
-        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
-        if not self.use_conmod:
-            print(
-                f"Modality filtering turned off, proceeding for patient {patient_id} note {note_name}"
-            )
-            self._write_actual_proc_mentions(cas, proc_mentions)
-            return
-        conmod_instances = (
-            TimelineAnnotator._get_conmod_instance(chemo, cas)
-            for chemo in proc_mentions
-        )
-
-        conmod_classifications = (
-            result["label"]
-            for result in filter(None, self.conmod_classifier(conmod_instances))
-        )
-        actual_proc_mentions = [
-            chemo
-            for chemo, modality in zip(proc_mentions, conmod_classifications)
-            if modality == "ACTUAL"
-        ]
-
-        if len(actual_proc_mentions) > 0:
-            print(
-                f"Found concrete chemotherapy mentions in patient {patient_id} note {note_name} - proceeding"
-            )
-            self._write_actual_proc_mentions(cas, actual_proc_mentions)
-        else:
-            # empty discovery writing logic so no patients are skipped for the eval script
-            self._add_empty_discovery(cas)
-            print(
-                f"No concrete chemotherapy mentions found in patient {patient_id} note {note_name} - skipping"
-            )
-
-    def _write_actual_proc_mentions(
-        self, cas: Cas, positive_chemo_mentions: List[FeatureStructure]
-    ):
-        timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
-        cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
-        document_creation_time = cas_source_data.sourceOriginalDate
-        relevant_timexes = TimelineAnnotator._timexes_with_normalization(
-            cas.select(timex_type)
-        )
-
-        base_tokens, token_map = TimelineAnnotator._tokens_and_map(cas, mode="dtr")
-        begin2token, end2token = TimelineAnnotator._invert_map(token_map)
-
-        def local_window_mentions(chemo):
-            return TimelineAnnotator._get_tlink_window_mentions(
-                chemo, relevant_timexes, begin2token, end2token, token_map
-            )
-
-        def dtr_result(chemo):
-            inst = TimelineAnnotator._get_dtr_instance(
-                chemo, base_tokens, begin2token, end2token
-            )
-            result = list(self.dtr_classifier(inst))[0]
-            label = result["label"]
-            return label, inst
-
-        def tlink_result(chemo, timex):
-            inst = TimelineAnnotator._get_tlink_instance(
-                chemo, timex, base_tokens, begin2token, end2token
-            )
-            result = list(self.tlink_classifier(inst))[0]
-            label = result["label"]
-            if timex.begin < chemo.begin:
-                label = LABEL_TO_INVERTED_LABEL[label]
-            return label, inst
-
-        def tlink_result_dict(chemo):
-            window_mentions = local_window_mentions(chemo)
-            return {
-                window_mention: tlink_result(chemo, window_mention)
-                for window_mention in window_mentions
-            }
-
-        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
-
-        # Needed for Jiarui's deduplication algorithm
-        annotation_ids = {
-            annotation: f"{index}@e@{note_name}@system"
-            for index, annotation in enumerate(
-                sorted(
-                    chain.from_iterable((positive_chemo_mentions, relevant_timexes)),
-                    key=lambda annotation: annotation.begin,
-                )
-            )
-        }
-        if (
-            len(list(relevant_timexes)) == 0
-            or len(
-                list(
-                    chain.from_iterable(
-                        map(local_window_mentions, positive_chemo_mentions)
-                    )
-                )
-            )
-            == 0
-        ):
-            print(
-                f"WARNING: No timexes suitable for TLINK pairing discovered in {patient_id} file {note_name}"
-            )
-            self._add_empty_discovery(cas)
-            return
-        for chemo in positive_chemo_mentions:
-            chemo_dtr, dtr_inst = "", ""  # purely so pyright stops complaining
-            if self.use_dtr:
-                chemo_dtr, dtr_inst = dtr_result(chemo)
-            tlink_dict = tlink_result_dict(chemo)
-            for timex, tlink_inst_pair in tlink_dict.items():
-                tlink, tlink_inst = tlink_inst_pair
-                chemo_text = TimelineAnnotator._normalize_mention(chemo)
-                timex_text = timex.time.normalizedForm
-                if self.use_dtr:
-                    instance = [
-                        document_creation_time,
-                        patient_id,
-                        chemo_text,
-                        annotation_ids[chemo],
-                        chemo_dtr,
-                        timex_text,
-                        annotation_ids[timex],
-                        tlink,
-                        note_name,
-                        dtr_inst,
-                        tlink_inst,
-                    ]
-                else:
-                    instance = [
-                        document_creation_time,
-                        patient_id,
-                        chemo_text,
-                        annotation_ids[chemo],
-                        timex_text,
-                        annotation_ids[timex],
-                        tlink,
-                        note_name,
-                        tlink_inst,
-                    ]
-                self.raw_events.append(instance)
-
-    def _add_empty_discovery(self, cas: Cas):
-        cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
-        document_creation_time = cas_source_data.sourceOriginalDate
-        patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
-        self.raw_events.append(
-            TimelineAnnotator._empty_discovery(
-                document_creation_time, patient_id, note_name, self.use_dtr
-            )
-        )
-
-    @staticmethod
-    def _empty_discovery(
-        DCT: str, patient_id: str, note_name: str, use_dtr: bool
-    ) -> List[str]:
-        if use_dtr:
-            return [
-                DCT,
-                patient_id,
-                "none",
-                "none",
-                "none",
-                "none",
-                "none",
-                "none",
-                note_name,
-                "none",
-                "none",
-            ]
-        return [
-            DCT,
-            patient_id,
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            note_name,
-            "none",
-        ]
 
     @staticmethod
     def _normalize_mention(mention: Union[FeatureStructure, None]) -> str:
@@ -408,27 +164,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             end_map[end] = token_index
         return begin_map, end_map
 
-    # previous conmod model used Pitt sentencing and tokenization
-    # for the next conmod model it should use DTR instances
-    @staticmethod
-    def _get_conmod_instance(event: FeatureStructure, cas: Cas) -> str:
-        raw_sentence = list(cas.select_covering(ctakes_types.Sentence, event))[0]
-        tokens, token_map = TimelineAnnotator._tokens_and_map(
-            cas, raw_sentence, mode="conmod"
-        )
-        begin2token, end2token = TimelineAnnotator._invert_map(token_map)
-        event_begin = begin2token[event.begin]
-        event_end = end2token[event.end] + 1
-        str_builder = (
-            tokens[:event_begin]
-            + ["<e>"]
-            + tokens[event_begin:event_end]
-            + ["</e>"]
-            + tokens[event_end:]
-        )
-        result = " ".join(str_builder)
-        return result
-
     @staticmethod
     def _timexes_with_normalization(
         timexes: List[FeatureStructure],
@@ -498,32 +233,13 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         return result
 
     @staticmethod
-    def _get_dtr_instance(
-        event: FeatureStructure,
-        tokens: List[str],
-        begin2token: Dict[int, int],
-        end2token: Dict[int, int],
-    ) -> str:
-        event_begin = begin2token[event.begin]
-        event_end = end2token[event.end] + 1
-        str_builder = (
-            tokens[event_begin - DTR_WINDOW_RADIUS : event_begin]
-            + ["<e>"]
-            + tokens[event_begin:event_end]
-            + ["</e>"]
-            + tokens[event_end : event_end + DTR_WINDOW_RADIUS]
-        )
-        result = " ".join(str_builder)
-        return result
-
-    @staticmethod
     def _get_tlink_window_mentions(
         event: FeatureStructure,
         relevant_mentions: List[FeatureStructure],
         begin2token: Dict[int, int],
         end2token: Dict[int, int],
         token2char: List[Tuple[int, int]],
-    ) -> Generator[FeatureStructure, None, None]:
+    ) -> Iterator[FeatureStructure]:
         event_begin_token_index = begin2token[event.begin]
         event_end_token_index = end2token[event.end]
 
@@ -540,17 +256,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             end_inside = char_window_begin <= mention.end <= char_window_end
             return begin_inside and end_inside
 
-        for mention in relevant_mentions:
-            if in_window(mention):
-                yield mention
-
-    @staticmethod
-    def _deleted_neighborhood(
-        central_mention: FeatureStructure, mentions: List[FeatureStructure]
-    ) -> Generator[FeatureStructure, None, None]:
-        for mention in mentions:
-            if central_mention != mention:
-                yield mention
+        return (mention for mention in relevant_mentions if in_window(mention))
 
     @staticmethod
     def _pt_and_note(cas: Cas):
@@ -559,24 +265,3 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         note_name = os.path.basename(document_path).split(".")[0]
         patient_id = note_name.split("_")[0]
         return patient_id, note_name
-
-    @staticmethod
-    def _get_tuis(event: FeatureStructure) -> Set[str]:
-        def get_tui(event):
-            return getattr(event, "tui", None)
-
-        ont_concept_arr = getattr(event, "ontologyConceptArr", None)
-        elements = getattr(ont_concept_arr, "elements", [])
-        if len(elements) == 0:
-            return set()
-        return {tui for tui in map(get_tui, elements) if tui is not None}
-
-    @staticmethod
-    def _get_pipeline(path, device):
-        return pipeline(
-            model=path,
-            device=device,
-            padding=True,
-            truncation=True,
-            max_length=MODEL_MAX_LEN,
-        )
