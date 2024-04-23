@@ -1,15 +1,16 @@
 import os
+import re
 from collections import deque
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Union, cast
 
 import pandas as pd
-import torch
-import re
 from cassis.cas import Cas
-from datasets import Dataset
 from cassis.typesystem import FeatureStructure
 from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
+from more_itertools import flatten, unzip
+
+from .ModelInterface import ClassificationModeInterface, TaggingModelInterface
 
 MAX_TLINK_DISTANCE = 60
 TLINK_PAD_LENGTH = 2
@@ -45,8 +46,7 @@ LABEL_TO_INVERTED_LABEL = {
 class TimelineAnnotator(cas_annotator.CasAnnotator):
     def __init__(self):
         self.output_dir = "."
-        self.tlink_classifier = lambda _: []
-        self.med_tagger = lambda _: []
+        # for type inference
         self.raw_events = deque()
 
     def init_params(self, arg_parser):
@@ -55,20 +55,18 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         self.output_dir = arg_parser.output_dir
 
     def initialize(self):
-        if torch.cuda.is_available():
-            main_device = 0
-            print("GPU with CUDA is available, using GPU")
-        else:
-            main_device = -1
-            print("GPU with CUDA is not available, defaulting to CPU")
+        # For trainer objects we don't need this
+        # since it binds to CUDA by default
+        # if torch.cuda.is_available():
+        #     main_device = 0
+        #     print("GPU with CUDA is available, using GPU")
+        # else:
+        #     main_device = -1
+        #     print("GPU with CUDA is not available, defaulting to CPU")
 
-        self.tlink_classifier = TimelineAnnotator._load_classifier(
-            self.tlink_model_path, main_device
-        )
+        self.tlink_classifier = ClassificationModeInterface(self.tlink_model_path)
         print("TLINK classifier loaded")
-        self.med_tagger = TimelineAnnotator._load_tagger(
-            self.med_model_path, main_device
-        )
+        self.med_tagger = TaggingModelInterface(self.med_model_path)
         print("Medication tagger loaded")
 
     def declare_params(self, arg_parser):
@@ -142,12 +140,13 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             for chemo, timex in ordered_chemo_timex_pairs
         )
 
-        tlink_classifications = self._get_tlink_classifications(
+        raw_tlink_classifications = self._get_tlink_classifications(
             tlink_classification_instances
         )
+
         cas_source_data = cas.select(ctakes_types.Metadata)[0].sourceData
         document_creation_time = cas_source_data.sourceOriginalDate
-        for pair, tlink in zip(ordered_chemo_timex_pairs, tlink_classifications):
+        for pair, tlink in zip(ordered_chemo_timex_pairs, raw_tlink_classifications):
             chemo, timex = pair
             if timex.begin < chemo.begin:
                 tlink = LABEL_TO_INVERTED_LABEL[tlink]
@@ -163,7 +162,14 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             )
 
     def collection_process_complete(self):
-        output_columns = NO_DTR_OUTPUT_COLUMNS
+        output_columns = [
+            "patient_identifier",
+            "note_identifier",
+            "document_creation_time",
+            "chemo_mention_text",
+            "normalized_timex_text",
+            "tlink",
+        ]
         output_tsv_name = "unsummarized_output.tsv"
         output_path = "".join((self.output_dir, "/", output_tsv_name))
         print("Finished processing notes")
@@ -223,7 +229,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         newline_tag = "<cr>" if mode == "conmod" else "<newline>"
         newline_tokens = cas.select(ctakes_types.NewlineToken)
         newline_token_indices = {(item.begin, item.end) for item in newline_tokens}
-        # duplicates = defaultdict(list)
         raw_token_collection = (
             cas.select(ctakes_types.BaseToken)
             if context is None
@@ -253,15 +258,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         return base_tokens, token_map
 
     @staticmethod
-    def process_ann(tagged_sentence: str) -> List[Tuple[int, int]]:
-        """
-
-        Args:
-        annotation:  NER model output tags
-
-        Returns:
-        Annotation relative indices of discovered entity mentions
-        """
+    def _tags_to_indices(tagged_sentence: str) -> List[Tuple[int, int]]:
         span_begin, span_end = 0, 0
         indices = []
         # Group B's individually as well as B's followed by
@@ -308,17 +305,37 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         return begin_map, end_map
 
     def _get_chemo_mentions(self, cas: Cas) -> List[Tuple[int, int]]:
-        # TODO - Hf Dataset logic and inference etc etc
-        return []
+        sentence_type = cas.typesystem.get_type(ctakes_types.Sentence)
+        cas_sentences = sorted(cas.select(sentence_type), key=lambda t: t.begin)
+        sentence_texts, index_maps = unzip(
+            TimelineAnnotator._ctakes_clean(cas, sentence) for sentence in cas_sentences
+        )
+        sentence_tags = self.med_tagger.process_instances(
+            cast(Iterable[str], sentence_texts)
+        )
+        # the whole point of using unzip(...) instead of zip(*...)
+        # was for type support but you get what you pay for
+        index_maps = cast(Iterable[List[Tuple[int, int]]], index_maps)
+
+        def to_character_indices(
+            tagged_sentence: str, index_map: List[Tuple[int, int]]
+        ) -> Iterable[Tuple[int, int]]:
+            tag_groups = TimelineAnnotator._tags_to_indices(tagged_sentence)
+            for tag_group in tag_groups:
+                token_begin, token_end = tag_group
+                yield index_map[token_begin][0], index_map[token_end][1]
+
+        return list(
+            flatten(
+                to_character_indices(tagged_sentence, index_map)
+                for tagged_sentence, index_map in zip(sentence_tags, index_maps)
+            )
+        )
 
     def _get_tlink_classifications(
         self, tlink_classification_instances: Iterable[str]
     ) -> List[str]:
-        raw_dataset = Dataset.from_dict({"text": tlink_classification_instances})
-        processed_dataset = raw_dataset.map(
-            preprocess, batched=True, desc="Tokenizing dataset"
-        )
-        return []
+        return self.tlink_classifier(tlink_classification_instances)
 
     @staticmethod
     def _timexes_with_normalization(

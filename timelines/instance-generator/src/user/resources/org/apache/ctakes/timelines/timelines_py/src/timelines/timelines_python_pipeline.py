@@ -5,7 +5,6 @@ from ctakes_pbj.pipeline.pbj_pipeline import PBJPipeline
 
 from .timeline_annotator import TimelineAnnotator
 
-
 warnings.filterwarnings("ignore")
 
 
