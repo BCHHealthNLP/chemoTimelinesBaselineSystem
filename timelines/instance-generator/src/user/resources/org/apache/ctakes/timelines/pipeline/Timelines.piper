@@ -2,6 +2,8 @@ package org.apache.ctakes.timelines
 
 set SetJavaHome=no
 set ForceExit=no
+cli TlinkDir=t
+cli MedDir=m
 
 load PbjStarter
 
@@ -9,12 +11,7 @@ add PythonRunner Command="-m pip install resources/org/apache/ctakes/timelines/t
 
 set TimelinesSecondStep=timelines.timelines_python_pipeline
 
-add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory"
-
-set minimumSpan=2
-set exclusionTags=“”
-
-// Just the components we need from DefaultFastPipeline
+add PythonRunner Command="-m $TimelinesSecondStep -rq JavaToPy -o $OutputDirectory --tlink_model_path $TlinkDir --med_model_path $MedDir"
 
 // Write nice big banners when ctakes starts and finishes.
 set WriteBanner=yes
@@ -22,7 +19,8 @@ set WriteBanner=yes
 // One giant section
 add SimpleSegmentAnnotator
 
-//  Detect sentences using a machine learning model.
+//  Detect sentences using the SVM model trained
+//  to deal with the forced newlines in UPMC notes
 addLogged SentenceDetectorAnnotatorBIO classifierJarPath=/org/apache/ctakes/core/models/sentdetect/model.jar
 
 // Joins sentences improperly split at person titles.

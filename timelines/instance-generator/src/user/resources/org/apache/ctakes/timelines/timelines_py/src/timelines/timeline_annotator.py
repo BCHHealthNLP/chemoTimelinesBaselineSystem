@@ -10,7 +10,7 @@ from ctakes_pbj.component import cas_annotator
 from ctakes_pbj.type_system import ctakes_types
 from more_itertools import flatten, unzip
 
-from .ModelInterface import ClassificationModeInterface, TaggingModelInterface
+from .ModelInterface import ClassificationModelInterface, TaggingModelInterface
 
 MAX_TLINK_DISTANCE = 60
 TLINK_PAD_LENGTH = 2
@@ -46,7 +46,6 @@ LABEL_TO_INVERTED_LABEL = {
 class TimelineAnnotator(cas_annotator.CasAnnotator):
     def __init__(self):
         self.output_dir = "."
-        # for type inference
         self.raw_events = deque()
 
     def init_params(self, arg_parser):
@@ -64,14 +63,14 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         #     main_device = -1
         #     print("GPU with CUDA is not available, defaulting to CPU")
 
-        self.tlink_classifier = ClassificationModeInterface(self.tlink_model_path)
+        self.tlink_classifier = ClassificationModelInterface(self.tlink_model_path)
         print("TLINK classifier loaded")
         self.med_tagger = TaggingModelInterface(self.med_model_path)
         print("Medication tagger loaded")
 
     def declare_params(self, arg_parser):
-        arg_parser.add_arg("--tlink_model_path", action="store_true")
-        arg_parser.add_arg("--med_model_path", action="store_true")
+        arg_parser.add_arg("--tlink_model_path")
+        arg_parser.add_arg("--med_model_path")
 
     def process(self, cas: Cas):
         timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)

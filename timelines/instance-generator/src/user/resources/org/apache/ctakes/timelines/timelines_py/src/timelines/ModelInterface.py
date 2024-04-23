@@ -4,9 +4,14 @@ from typing import Iterable, List, Tuple, Union
 
 import numpy as np
 from more_itertools import unzip
-from transformers import (AutoConfig, AutoModelForSequenceClassification,
-                          AutoModelForTokenClassification, AutoTokenizer,
-                          DataCollatorForTokenClassification, Trainer)
+from transformers import (
+    AutoConfig,
+    AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
+    AutoTokenizer,
+    DataCollatorForTokenClassification,
+    Trainer,
+)
 
 
 class ModelInterface(ABC):
@@ -48,7 +53,7 @@ class ClassificationModelInterface(ModelInterface):
     def process_instances(self, instances: Iterable[str]) -> List[str]:
         label_dict = getattr(self.config, "id2label")
         tokenized_inputs = self.tokenizer(
-            (instance.split() for instance in instances),
+            [instance.split() for instance in instances],
             padding=True,
             max_length=512,
             truncation=True,
@@ -65,24 +70,23 @@ class TaggingModelInterface(ModelInterface):
         self.label_list = ["O", "B", "I"]
         self.tokenizer = AutoTokenizer.from_pretrained(path)
 
-        data_collator = DataCollatorForTokenClassification(self.tokenizer)
+        # data_collator = DataCollatorForTokenClassification(self.tokenizer)
         model = AutoModelForTokenClassification.from_pretrained(path)
         self.trainer = Trainer(
             model,
-            per_device_eval_batch_size=32,
-            data_collator=data_collator,
+            # data_collator=data_collator,
             tokenizer=self.tokenizer,
         )
 
     def process_instances(self, instances: Iterable[str]) -> List[str]:
         tokenized_inputs = self.tokenizer(
-            (instance.split() for instance in instances),
+            [instance.split() for instance in instances],
             max_length=128,
             truncation=True,
             is_split_into_words=True,
             padding="max_length",
         )
-        raw_predictions, _, _ = self.trainer.predict(tokenized_inputs)
+        raw_predictions = self.trainer.predict(tokenized_inputs).predictions
         predictions = np.argmax(raw_predictions, axis=2)
 
         def group_to_label(group: Iterable[Tuple[int, int]]) -> str:
