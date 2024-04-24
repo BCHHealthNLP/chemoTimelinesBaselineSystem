@@ -1,6 +1,6 @@
 import os
 import re
-from collections import deque
+from collections import Counter, deque
 from typing import Dict, Iterable, List, Optional, Tuple, Union, cast
 
 import pandas as pd
@@ -47,6 +47,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     def __init__(self):
         self.output_dir = "."
         self.raw_events = deque()
+        self.patient_to_note_count = Counter()
 
     def init_params(self, arg_parser):
         self.tlink_model_path = arg_parser.tlink_model_path
@@ -88,10 +89,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             begin, end = chemo_mention
             event_mention = event_mention_type(begin=begin, end=end)
             cas.add(event_mention)
-            # event_properties = event_properties_type()
-            # event = event_type()
-            # setattr(event, "properties", event_properties)
-            # setattr(event_mention, "event", event)
         base_tokens, token_map = TimelineAnnotator._tokens_and_map(cas, mode="dtr")
         begin2token, end2token = TimelineAnnotator._invert_map(token_map)
 
@@ -102,17 +99,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 chemo, relevant_timexes, begin2token, end2token, token_map
             )
 
-        unique_chemos_from_model = set(chemo_mentions)
-        inserted_chemo_mentions = cas.select(event_mention_type)
-        unique_inserted_chemos = {
-            (chemo.begin, chemo.end) for chemo in inserted_chemo_mentions
-        }
-        if unique_inserted_chemos != unique_chemos_from_model:
-            print(unique_chemos_from_model)
-            print(unique_chemos_from_model - unique_inserted_chemos)
         chemo_to_relevant_timexes = {
             chemo: local_window_mentions(chemo)
-            for chemo in sorted(inserted_chemo_mentions, key=lambda t: t.begin)
+            for chemo in sorted(cas.select(event_mention_type), key=lambda t: t.begin)
         }
 
         if not any(chemo_to_relevant_timexes.values()):
@@ -148,10 +137,13 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                     note_name,
                     document_creation_time,
                     TimelineAnnotator._normalize_mention(chemo),
-                    TimelineAnnotator._normalize_mention(timex),
+                    # by this point these attributes are guaranteed to
+                    # be here
+                    timex.time.normalizedForm,
                     tlink,
                 )
             )
+        self.patient_to_note_count[patient_id] += 1
 
     def collection_process_complete(self):
         output_columns = [
@@ -164,7 +156,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         ]
         output_tsv_name = "unsummarized_output.tsv"
         output_path = "".join((self.output_dir, "/", output_tsv_name))
-        print("Finished processing notes")
+        print(
+            f"Finished processing {sum(self.patient_to_note_count.values())} notes for {len(self.patient_to_note_count.keys())} patients"
+        )
         print(f"Writing results for all input in {output_path}")
         pt_df = pd.DataFrame.from_records(
             self.raw_events,
