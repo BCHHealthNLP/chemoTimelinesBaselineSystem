@@ -1,18 +1,13 @@
 from abc import ABC, abstractmethod
 from itertools import groupby
 from typing import Iterable, List, Tuple, Union
-from datasets import Dataset
 
 import numpy as np
+from datasets import Dataset
 from more_itertools import unzip
-from transformers import (
-    AutoConfig,
-    AutoModelForSequenceClassification,
-    AutoModelForTokenClassification,
-    AutoTokenizer,
-    DataCollatorForTokenClassification,
-    Trainer,
-)
+from transformers import (AutoConfig, AutoModelForSequenceClassification,
+                          AutoModelForTokenClassification, AutoTokenizer,
+                          DataCollatorForTokenClassification, Trainer)
 
 
 class ModelInterface(ABC):
