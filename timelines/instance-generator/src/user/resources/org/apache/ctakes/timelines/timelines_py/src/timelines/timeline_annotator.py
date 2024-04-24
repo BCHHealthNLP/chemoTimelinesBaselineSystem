@@ -54,15 +54,6 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         self.output_dir = arg_parser.output_dir
 
     def initialize(self):
-        # For trainer objects we don't need this
-        # since it binds to CUDA by default
-        # if torch.cuda.is_available():
-        #     main_device = 0
-        #     print("GPU with CUDA is available, using GPU")
-        # else:
-        #     main_device = -1
-        #     print("GPU with CUDA is not available, defaulting to CPU")
-
         self.tlink_classifier = ClassificationModelInterface(self.tlink_model_path)
         print("TLINK classifier loaded")
         self.med_tagger = TaggingModelInterface(self.med_model_path)

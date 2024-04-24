@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from itertools import groupby
 from typing import Iterable, List, Tuple, Union
+from datasets import Dataset
 
 import numpy as np
 from more_itertools import unzip
@@ -9,7 +10,6 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     AutoTokenizer,
-    DataCollatorForTokenClassification,
     Trainer,
 )
 
@@ -51,16 +51,22 @@ class ClassificationModelInterface(ModelInterface):
         )
 
     def process_instances(self, instances: Iterable[str]) -> List[str]:
-        label_dict = getattr(self.config, "id2label")
-        tokenized_inputs = self.tokenizer(
-            [instance.split() for instance in instances],
-            padding=True,
-            max_length=512,
-            truncation=True,
-            is_split_into_words=True,
-        )
+        def preprocess(_instances):
+            tokenized_inputs = self.tokenizer(
+                [instance.split() for instance in _instances["text"]],
+                padding=True,
+                max_length=512,
+                truncation=True,
+                is_split_into_words=True,
+            )
+            return tokenized_inputs
 
-        raw_predictions, _, _ = self.trainer.predict(tokenized_inputs)
+        raw_dataset = Dataset.from_dict({"text": instances})
+
+        tokenized_dataset = raw_dataset.map(preprocess)
+        label_dict = getattr(self.config, "id2label")
+
+        raw_predictions, _, _ = self.trainer.predict(tokenized_dataset)
         predictions = np.argmax(raw_predictions, axis=1)
         return [label_dict[label_index] for label_index in predictions]
 
@@ -79,14 +85,20 @@ class TaggingModelInterface(ModelInterface):
         )
 
     def process_instances(self, instances: Iterable[str]) -> List[str]:
-        tokenized_inputs = self.tokenizer(
-            [instance.split() for instance in instances],
-            max_length=128,
-            truncation=True,
-            is_split_into_words=True,
-            padding="max_length",
-        )
-        raw_predictions = self.trainer.predict(tokenized_inputs).predictions
+        def preprocess(_instances):
+            tokenized_inputs = self.tokenizer(
+                [instance.split() for instance in _instances["text"]],
+                max_length=128,
+                truncation=True,
+                is_split_into_words=True,
+                padding="max_length",
+            )
+            tokenized_inputs["token_ids"] = tokenized_inputs.word_ids(batch_index=0)
+            return tokenized_inputs
+
+        raw_dataset = Dataset.from_dict({"text": instances})
+        tokenized_dataset = raw_dataset.map(preprocess)
+        raw_predictions = self.trainer.predict(tokenized_dataset).predictions
         predictions = np.argmax(raw_predictions, axis=2)
 
         def group_to_label(group: Iterable[Tuple[int, int]]) -> str:
@@ -98,7 +110,7 @@ class TaggingModelInterface(ModelInterface):
             relevant_token_ids_and_tags = (
                 (token_id, tag)
                 for token_id, tag in zip(
-                    tokenized_inputs.word_ids(batch_index=index), prediction
+                    tokenized_dataset[index]["token_ids"], prediction
                 )
                 if token_id is not None
             )
