@@ -65,9 +65,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
 
     def process(self, cas: Cas):
         timex_type = cas.typesystem.get_type(ctakes_types.TimeMention)
-        event_type = cas.typesystem.get_type(ctakes_types.Event)
         event_mention_type = cas.typesystem.get_type(ctakes_types.EventMention)
-        event_properties_type = cas.typesystem.get_type(ctakes_types.EventProperties)
         patient_id, note_name = TimelineAnnotator._pt_and_note(cas)
         # sorting here so we have a reliable way of accessing the
         # chemo - timex pairs later
@@ -86,18 +84,14 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             )
             return
 
-        def insert_chemo_mention(chemo_mention: Tuple[int, int]) -> None:
+        for chemo_mention in chemo_mentions:
             begin, end = chemo_mention
             event_mention = event_mention_type(begin=begin, end=end)
             cas.add(event_mention)
-            event_properties = event_properties_type()
-            event = event_type()
-            setattr(event, "properties", event_properties)
-            setattr(event_mention, "event", event)
-
-        for chemo_mention in chemo_mentions:
-            insert_chemo_mention(chemo_mention)
-
+            # event_properties = event_properties_type()
+            # event = event_type()
+            # setattr(event, "properties", event_properties)
+            # setattr(event_mention, "event", event)
         base_tokens, token_map = TimelineAnnotator._tokens_and_map(cas, mode="dtr")
         begin2token, end2token = TimelineAnnotator._invert_map(token_map)
 
@@ -108,9 +102,17 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
                 chemo, relevant_timexes, begin2token, end2token, token_map
             )
 
+        unique_chemos_from_model = set(chemo_mentions)
+        inserted_chemo_mentions = cas.select(event_mention_type)
+        unique_inserted_chemos = {
+            (chemo.begin, chemo.end) for chemo in inserted_chemo_mentions
+        }
+        if unique_inserted_chemos != unique_chemos_from_model:
+            print(unique_chemos_from_model)
+            print(unique_chemos_from_model - unique_inserted_chemos)
         chemo_to_relevant_timexes = {
             chemo: local_window_mentions(chemo)
-            for chemo in sorted(cas.select(event_type), key=lambda t: t.begin)
+            for chemo in sorted(inserted_chemo_mentions, key=lambda t: t.begin)
         }
 
         if not any(chemo_to_relevant_timexes.values()):
@@ -123,12 +125,12 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
             for chemo, timexes in chemo_to_relevant_timexes.items()
             for timex in timexes
         ]
-        tlink_classification_instances = (
+        tlink_classification_instances = [
             TimelineAnnotator._get_tlink_instance(
                 chemo, timex, base_tokens, begin2token, end2token
             )
             for chemo, timex in ordered_chemo_timex_pairs
-        )
+        ]
 
         raw_tlink_classifications = self._get_tlink_classifications(
             tlink_classification_instances
@@ -300,9 +302,9 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
         sentence_texts, index_maps = unzip(
             TimelineAnnotator._ctakes_clean(cas, sentence) for sentence in cas_sentences
         )
-        sentence_tags = self.med_tagger.process_instances(
-            cast(Iterable[str], sentence_texts)
-        )
+        sentence_texts = list(cast(Iterable[str], sentence_texts))
+        index_maps = list(cast(Iterable[List[Tuple[int, int]]], index_maps))
+        sentence_tags = self.med_tagger.process_instances(sentence_texts)
         # the whole point of using unzip(...) instead of zip(*...)
         # was for type support but you get what you pay for
         index_maps = cast(Iterable[List[Tuple[int, int]]], index_maps)
@@ -325,7 +327,7 @@ class TimelineAnnotator(cas_annotator.CasAnnotator):
     def _get_tlink_classifications(
         self, tlink_classification_instances: Iterable[str]
     ) -> List[str]:
-        return self.tlink_classifier(tlink_classification_instances)
+        return self.tlink_classifier.process_instances(tlink_classification_instances)
 
     @staticmethod
     def _timexes_with_normalization(

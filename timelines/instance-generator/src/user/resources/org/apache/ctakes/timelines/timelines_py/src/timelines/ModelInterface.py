@@ -10,6 +10,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     AutoTokenizer,
+    DataCollatorForTokenClassification,
     Trainer,
 )
 
@@ -50,10 +51,10 @@ class ClassificationModelInterface(ModelInterface):
             tokenizer=self.tokenizer,
         )
 
-    def process_instances(self, instances: Iterable[str]) -> List[str]:
-        def preprocess(_instances):
+    def process_instances(self, instances: List[str]) -> List[str]:
+        def preprocess(_instance):
             tokenized_inputs = self.tokenizer(
-                [instance.split() for instance in _instances["text"]],
+                _instance["text"].split(),
                 padding=True,
                 max_length=512,
                 truncation=True,
@@ -76,18 +77,18 @@ class TaggingModelInterface(ModelInterface):
         self.label_list = ["O", "B", "I"]
         self.tokenizer = AutoTokenizer.from_pretrained(path)
 
-        # data_collator = DataCollatorForTokenClassification(self.tokenizer)
+        data_collator = DataCollatorForTokenClassification(self.tokenizer)
         model = AutoModelForTokenClassification.from_pretrained(path)
         self.trainer = Trainer(
             model,
-            # data_collator=data_collator,
+            data_collator=data_collator,
             tokenizer=self.tokenizer,
         )
 
-    def process_instances(self, instances: Iterable[str]) -> List[str]:
-        def preprocess(_instances):
+    def process_instances(self, instances: List[str]) -> List[str]:
+        def preprocess(_instance):
             tokenized_inputs = self.tokenizer(
-                [instance.split() for instance in _instances["text"]],
+                _instance["text"].split(),
                 max_length=128,
                 truncation=True,
                 is_split_into_words=True,
@@ -114,10 +115,11 @@ class TaggingModelInterface(ModelInterface):
                 )
                 if token_id is not None
             )
-            return "".join(
+            tags = "".join(
                 group_to_label(g)
                 for _, g in groupby(relevant_token_ids_and_tags, lambda s: s[0])
             )
+            return tags
 
         return [
             get_tags(index, prediction) for index, prediction in enumerate(predictions)
