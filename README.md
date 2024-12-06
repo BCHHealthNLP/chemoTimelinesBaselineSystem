@@ -17,7 +17,7 @@ There are three main separate software packages that this code uses:
 
 
 cTAKES contains several tools for text engineering and information extraction with a focus on clinical text, it makes heavy use of [Apache UIMA](https://uima.apache.org).
-Within cTAKES the main module which drives this code is the cTAKES [Python Bridge to Java](https://github.com/apache/ctakes/tree/main/ctakes-pbj).
+Within cTAKES the main module which drives this code is the cTAKES [Python Bridge to Java](https://github.com/apache/ctakes/wiki/ctakes-pbj).
 While cTAKES is written in Java, the Python Bridge to Java (*ctakes-pbj*) allows use of Python code to process text artifacts the same way one can do with Java code in cTAKES.  *ctakes-pbj* accomplishes this by passing text artifacts and their extracted information between the relevant Java and Python processes using [DKPro cassis]( https://github.com/dkpro/dkpro-cassis) for serialization, [Apache ActiveMQ]( https://activemq.apache.org) for message brokering, and [stomp.py](https://github.com/jasonrbriggs/stomp.py) for Python-side receipt from and transmission to ActiveMQ.
 
 Timenorm provides methods for identifying and normalizing date and time expressions.  We use a customized version (included as a maven module) where we change a heuristic for approximate dates to better address the needs of the timelines project.
