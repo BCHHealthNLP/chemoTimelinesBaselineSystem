@@ -32,16 +32,16 @@ disable_system_repos=0\n'\
 # Clean all yum cache
 RUN yum update -y && \
     yum install -y yum-utils && \
-    yum install -y which java-11-openjdk java-11-openjdk-devel unzip && \
+    yum install -y which java-17-openjdk java-17-openjdk-devel unzip && \
     curl -fsSL https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz | tar xzf - -C /usr/share && \
     mv /usr/share/apache-maven-$MAVEN_VERSION /usr/share/maven && \
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn && \
     yum install -y gcc git python39 python39-devel && \
     alternatives --set python /usr/bin/python3.9 && \
     pip3 install --upgrade pip && \
-    curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.32.0/apache-artemis-2.32.0-bin.zip && \
-    unzip apache-artemis-2.32.0-bin.zip && \
-    apache-artemis-2.32.0/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous && \
+    curl -LO https://archive.apache.org/dist/activemq/activemq-artemis/2.36.0/apache-artemis-2.36.0-bin.zip && \
+    unzip apache-artemis-2.36.0-bin.zip && \
+    apache-artemis-2.36.0/bin/artemis create mybroker --user deepphe --password deepphe --allow-anonymous && \
     yum clean all
 
 # Set environment variables for Java and Maven
@@ -61,7 +61,7 @@ RUN mvn -U clean package
 
 # Execute the parser jar
 CMD ["java", "-cp", \
-"instance-generator/target/instance-generator-5.0.0-SNAPSHOT-jar-with-dependencies.jar", \
+"instance-generator/target/instance-generator-7.0.0-SNAPSHOT-jar-with-dependencies.jar", \
 "org.apache.ctakes.core.pipeline.PiperFileRunner", \
 "-p", "org/apache/ctakes/timelines/pipeline/Timelines", \
 "-i", "/usr/src/app/input", \
